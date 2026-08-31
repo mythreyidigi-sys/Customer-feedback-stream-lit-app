@@ -1,0 +1,530 @@
+issue_category,week,review_count,rolling_mean,z_score,rule_flag,iforest_flag,both_flag
+Ambience & Seating,2025-07-28,4,,,False,True,False
+Ambience & Seating,2025-08-04,12,,,False,True,False
+Ambience & Seating,2025-08-11,10,8.666666666666666,0.3202563076101744,False,False,False
+Ambience & Seating,2025-08-18,10,9.0,0.28867513459481287,False,False,False
+Ambience & Seating,2025-08-25,5,8.2,-0.916157334902189,False,False,False
+Ambience & Seating,2025-09-01,7,8.0,-0.31622776601683794,False,False,False
+Ambience & Seating,2025-09-08,14,9.666666666666666,1.3268069440075547,False,False,False
+Ambience & Seating,2025-09-15,16,10.333333333333334,1.3716816017817932,False,False,False
+Ambience & Seating,2025-09-22,15,11.166666666666666,0.8452683953536204,False,False,False
+Ambience & Seating,2025-09-29,12,11.5,0.1109741904046188,False,False,False
+Ambience & Seating,2025-10-06,11,12.5,-0.458563380386807,False,False,False
+Ambience & Seating,2025-10-13,11,13.166666666666666,-1.0138937495022844,False,False,False
+Ambience & Seating,2025-10-20,11,12.666666666666666,-0.7404360971988643,False,False,False
+Ambience & Seating,2025-10-27,10,11.666666666666666,-0.9517337345335999,False,False,False
+Ambience & Seating,2025-11-03,8,10.5,-1.8136906252750298,False,False,False
+Ambience & Seating,2025-11-10,8,9.833333333333334,-1.2455047375590578,False,False,False
+Ambience & Seating,2025-11-17,12,10.0,1.1952286093343947,False,False,False
+Ambience & Seating,2025-11-24,7,9.333333333333334,-1.1866111313364203,False,False,False
+Ambience & Seating,2025-12-01,13,9.666666666666666,1.376204706407952,False,False,False
+Ambience & Seating,2025-12-08,11,9.833333333333334,0.46980923864981705,False,False,False
+Ambience & Seating,2025-12-15,9,10.0,-0.42257712736425845,False,False,False
+Ambience & Seating,2025-12-22,12,10.666666666666666,0.5923488777590924,False,False,False
+Ambience & Seating,2025-12-29,15,11.166666666666666,1.3413872400955493,False,False,False
+Ambience & Seating,2026-01-05,7,11.166666666666666,-1.4580296087995097,False,False,False
+Ambience & Seating,2026-01-12,13,11.166666666666666,0.6415330278717846,False,False,False
+Ambience & Seating,2026-01-19,29,14.166666666666666,1.8997328426220816,False,True,False
+Ambience & Seating,2026-01-26,9,14.166666666666666,-0.661704697991961,False,False,False
+Ambience & Seating,2026-02-02,10,13.833333333333334,-0.48155528613011783,False,False,False
+Ambience & Seating,2026-02-09,12,13.333333333333334,-0.16736548175114463,False,False,False
+Ambience & Seating,2026-02-16,14,14.5,-0.0681044706603994,False,False,False
+Ambience & Seating,2026-02-23,13,14.5,-0.20431341198119823,False,False,False
+Ambience & Seating,2026-03-02,14,12.0,0.95346258924559,False,False,False
+Ambience & Seating,2026-03-09,15,13.0,1.118033988749888,False,False,False
+Ambience & Seating,2026-03-16,7,12.5,-1.9090778698767106,False,False,False
+Ambience & Seating,2026-03-23,9,12.0,-0.9302605094190624,False,False,False
+Ambience & Seating,2026-03-30,8,11.0,-0.8808303292720551,False,False,False
+Ambience & Seating,2026-04-06,17,11.666666666666666,1.276126454445392,False,True,False
+Ambience & Seating,2026-04-13,8,10.666666666666666,-0.6308802978765116,False,False,False
+Ambience & Seating,2026-04-20,6,9.166666666666666,-0.7975031508064154,False,False,False
+Ambience & Seating,2026-04-27,11,9.833333333333334,0.30156729917499353,False,False,False
+Ambience & Seating,2026-05-04,5,9.166666666666666,-0.9567385038418029,False,False,False
+Ambience & Seating,2026-05-11,10,9.5,0.11562432251572013,False,False,False
+Ambience & Seating,2026-05-18,13,8.833333333333334,1.361432850668808,False,False,False
+Ambience & Seating,2026-05-25,9,9.0,0.0,False,False,False
+Ambience & Seating,2026-06-01,11,9.833333333333334,0.4298444069404405,False,False,False
+Ambience & Seating,2026-06-08,13,10.166666666666666,0.9461982889345406,False,False,False
+Ambience & Seating,2026-06-15,9,10.833333333333334,-0.9991745768300428,False,False,False
+Ambience & Seating,2026-06-22,11,11.0,0.0,False,False,False
+Ambience & Seating,2026-06-29,13,11.0,1.1180339887498918,False,False,False
+Ambience & Seating,2026-07-06,6,10.5,-1.6888199063418032,False,False,False
+Ambience & Seating,2026-07-13,15,11.166666666666666,1.1792546078237744,False,True,False
+Ambience & Seating,2026-07-20,10,10.666666666666666,-0.21223817998900418,False,False,False
+Ambience & Seating,2026-07-27,8,10.5,-0.7642723006446788,False,False,False
+Billing & Online Ordering Issues,2025-07-28,3,,,False,False,False
+Billing & Online Ordering Issues,2025-08-04,9,,,False,True,False
+Billing & Online Ordering Issues,2025-08-11,9,7.0,0.5773502691896258,False,False,False
+Billing & Online Ordering Issues,2025-08-18,10,7.75,0.7027819284987273,False,False,False
+Billing & Online Ordering Issues,2025-08-25,8,7.8,0.07207499701564478,False,False,False
+Billing & Online Ordering Issues,2025-09-01,6,7.5,-0.5795005569646918,False,False,False
+Billing & Online Ordering Issues,2025-09-08,4,7.666666666666667,-1.628959413837504,False,False,False
+Billing & Online Ordering Issues,2025-09-15,7,7.333333333333333,-0.15430334996209175,False,False,False
+Billing & Online Ordering Issues,2025-09-22,14,8.166666666666666,1.672364688986238,False,False,False
+Billing & Online Ordering Issues,2025-09-29,8,7.833333333333333,0.049434732389013906,False,False,False
+Billing & Online Ordering Issues,2025-10-06,11,8.333333333333334,0.7377111135633174,False,False,False
+Billing & Online Ordering Issues,2025-10-13,7,8.5,-0.4276994613841508,False,False,False
+Billing & Online Ordering Issues,2025-10-20,12,9.833333333333334,0.7402632125569324,False,False,False
+Billing & Online Ordering Issues,2025-10-27,4,9.333333333333334,-1.4533448390255193,False,False,False
+Billing & Online Ordering Issues,2025-11-03,8,8.333333333333334,-0.11593472394004226,False,False,False
+Billing & Online Ordering Issues,2025-11-10,5,7.833333333333333,-0.8886042349318382,False,False,False
+Billing & Online Ordering Issues,2025-11-17,4,6.666666666666667,-0.8667027800348789,False,False,False
+Billing & Online Ordering Issues,2025-11-24,6,6.5,-0.16222142113076252,False,False,False
+Billing & Online Ordering Issues,2025-12-01,4,5.166666666666667,-0.7282190812544184,False,False,False
+Billing & Online Ordering Issues,2025-12-08,7,5.666666666666667,0.8164965809277249,False,False,False
+Billing & Online Ordering Issues,2025-12-15,11,6.166666666666667,1.8311934735248652,False,False,False
+Billing & Online Ordering Issues,2025-12-22,13,7.5,1.4752148971610053,False,False,False
+Billing & Online Ordering Issues,2025-12-29,7,8.0,-0.2988071523335984,False,False,False
+Billing & Online Ordering Issues,2026-01-05,50,15.333333333333334,2.005943549507195,True,True,True
+Billing & Online Ordering Issues,2026-01-12,9,16.166666666666668,-0.4281628412181979,False,False,False
+Billing & Online Ordering Issues,2026-01-19,8,16.333333333333332,-0.5010030100351265,False,False,False
+Billing & Online Ordering Issues,2026-01-26,11,16.333333333333332,-0.3206419264224809,False,False,False
+Billing & Online Ordering Issues,2026-02-02,9,15.666666666666666,-0.39513038984679977,False,False,False
+Billing & Online Ordering Issues,2026-02-09,5,15.333333333333334,-0.6044366583571323,False,False,False
+Billing & Online Ordering Issues,2026-02-16,11,8.833333333333334,0.9722089058425495,False,False,False
+Billing & Online Ordering Issues,2026-02-23,13,9.5,1.2452441171884414,False,False,False
+Billing & Online Ordering Issues,2026-03-02,10,9.833333333333334,0.061406343848634456,False,False,False
+Billing & Online Ordering Issues,2026-03-09,9,9.5,-0.18764665626020147,False,False,False
+Billing & Online Ordering Issues,2026-03-16,6,9.0,-0.9890707100936847,False,False,False
+Billing & Online Ordering Issues,2026-03-23,10,9.833333333333334,0.07194430788361957,False,False,False
+Billing & Online Ordering Issues,2026-03-30,8,9.333333333333334,-0.5702659485122054,False,False,False
+Billing & Online Ordering Issues,2026-04-06,8,8.5,-0.32969023669789876,False,False,False
+Billing & Online Ordering Issues,2026-04-13,8,8.166666666666666,-0.12539246564388185,False,False,False
+Billing & Online Ordering Issues,2026-04-20,10,8.333333333333334,1.1070186069251364,False,False,False
+Billing & Online Ordering Issues,2026-04-27,6,8.333333333333334,-1.549826049695192,False,False,False
+Billing & Online Ordering Issues,2026-05-04,26,11.0,2.0116566779468275,True,True,True
+Billing & Online Ordering Issues,2026-05-11,33,15.166666666666666,1.565492361122842,False,True,False
+Billing & Online Ordering Issues,2026-05-18,6,14.833333333333334,-0.7569883854780565,False,False,False
+Billing & Online Ordering Issues,2026-05-25,8,14.833333333333334,-0.5855947887660438,False,False,False
+Billing & Online Ordering Issues,2026-06-01,9,14.666666666666666,-0.4819133087584012,False,False,False
+Billing & Online Ordering Issues,2026-06-08,11,15.5,-0.40233133558936535,False,False,False
+Billing & Online Ordering Issues,2026-06-15,11,13.0,-0.2004012040140507,False,False,False
+Billing & Online Ordering Issues,2026-06-22,30,12.5,1.9930163414994353,False,True,False
+Billing & Online Ordering Issues,2026-06-29,15,14.0,0.12198750911856679,False,False,False
+Billing & Online Ordering Issues,2026-07-06,7,13.833333333333334,-0.8181041948568051,False,False,False
+Billing & Online Ordering Issues,2026-07-13,14,14.666666666666666,-0.08316026287998572,False,False,False
+Billing & Online Ordering Issues,2026-07-20,8,14.166666666666666,-0.7361817566203892,False,False,False
+Billing & Online Ordering Issues,2026-07-27,6,13.333333333333334,-0.8164965809277267,False,False,False
+Cleanliness & Restroom Hygiene,2025-07-28,2,,,False,False,False
+Cleanliness & Restroom Hygiene,2025-08-04,7,,,False,True,False
+Cleanliness & Restroom Hygiene,2025-08-11,7,5.333333333333333,0.5773502691896258,False,False,False
+Cleanliness & Restroom Hygiene,2025-08-18,3,4.75,-0.6654104630507017,False,False,False
+Cleanliness & Restroom Hygiene,2025-08-25,9,5.6,1.1461397661875117,False,False,False
+Cleanliness & Restroom Hygiene,2025-09-01,9,6.166666666666667,0.94619828893454,False,False,False
+Cleanliness & Restroom Hygiene,2025-09-08,9,7.333333333333333,0.7128324356402512,False,False,False
+Cleanliness & Restroom Hygiene,2025-09-15,5,7.0,-0.7905694150420947,False,False,False
+Cleanliness & Restroom Hygiene,2025-09-22,5,6.666666666666667,-0.6269623282193989,False,False,False
+Cleanliness & Restroom Hygiene,2025-09-29,9,7.666666666666667,0.6454972243679025,False,False,False
+Cleanliness & Restroom Hygiene,2025-10-06,11,8.0,1.2247448713915887,False,False,False
+Cleanliness & Restroom Hygiene,2025-10-13,9,8.0,0.4082482904638629,False,False,False
+Cleanliness & Restroom Hygiene,2025-10-20,7,7.666666666666667,-0.2752409412815902,False,False,False
+Cleanliness & Restroom Hygiene,2025-10-27,13,9.0,1.4142135623730947,False,False,False
+Cleanliness & Restroom Hygiene,2025-11-03,7,9.333333333333334,-0.9979654098963516,False,False,False
+Cleanliness & Restroom Hygiene,2025-11-10,5,8.666666666666666,-1.2455047375590547,False,False,False
+Cleanliness & Restroom Hygiene,2025-11-17,47,14.666666666666666,2.0119459104518853,True,True,True
+Cleanliness & Restroom Hygiene,2025-11-24,4,13.833333333333334,-0.5943064958819873,False,False,False
+Cleanliness & Restroom Hygiene,2025-12-01,9,14.166666666666666,-0.31503674604905463,False,False,False
+Cleanliness & Restroom Hygiene,2025-12-08,7,13.166666666666666,-0.37000740022200745,False,False,False
+Cleanliness & Restroom Hygiene,2025-12-15,3,12.5,-0.5575708843530077,False,False,False
+Cleanliness & Restroom Hygiene,2025-12-22,5,12.5,-0.4401875402786903,False,False,False
+Cleanliness & Restroom Hygiene,2025-12-29,11,6.5,1.4599927901768692,False,False,False
+Cleanliness & Restroom Hygiene,2026-01-05,7,7.0,0.0,False,False,False
+Cleanliness & Restroom Hygiene,2026-01-12,11,7.333333333333333,1.1443442705426636,False,False,False
+Cleanliness & Restroom Hygiene,2026-01-19,8,7.5,0.1557942382124396,False,False,False
+Cleanliness & Restroom Hygiene,2026-01-26,11,8.833333333333334,0.8455116894049919,False,False,False
+Cleanliness & Restroom Hygiene,2026-02-02,3,8.5,-1.7137366203368358,False,False,False
+Cleanliness & Restroom Hygiene,2026-02-09,11,8.5,0.7789711910621981,False,True,False
+Cleanliness & Restroom Hygiene,2026-02-16,10,9.0,0.3162277660168394,False,False,False
+Cleanliness & Restroom Hygiene,2026-02-23,5,8.0,-0.8964214570007986,False,False,False
+Cleanliness & Restroom Hygiene,2026-03-02,6,7.666666666666667,-0.48382062482261645,False,False,False
+Cleanliness & Restroom Hygiene,2026-03-09,5,6.666666666666667,-0.5305954499725132,False,False,False
+Cleanliness & Restroom Hygiene,2026-03-16,34,11.833333333333334,1.9860924890992484,False,True,False
+Cleanliness & Restroom Hygiene,2026-03-23,4,10.666666666666666,-0.5736336900829286,False,False,False
+Cleanliness & Restroom Hygiene,2026-03-30,6,10.0,-0.33951991873252213,False,False,False
+Cleanliness & Restroom Hygiene,2026-04-06,4,9.833333333333334,-0.4913133655874381,False,False,False
+Cleanliness & Restroom Hygiene,2026-04-13,6,9.833333333333334,-0.3228630688146022,False,False,False
+Cleanliness & Restroom Hygiene,2026-04-20,12,11.0,0.08587567332159081,False,False,False
+Cleanliness & Restroom Hygiene,2026-04-27,10,7.0,0.9128709291752803,False,False,False
+Cleanliness & Restroom Hygiene,2026-05-04,3,6.833333333333333,-1.0989825099052457,False,False,False
+Cleanliness & Restroom Hygiene,2026-05-11,14,8.166666666666666,1.2989718332941125,False,True,False
+Cleanliness & Restroom Hygiene,2026-05-18,10,9.166666666666666,0.20725666807242035,False,False,False
+Cleanliness & Restroom Hygiene,2026-05-25,10,9.833333333333334,0.0449194418380771,False,False,False
+Cleanliness & Restroom Hygiene,2026-06-01,12,9.833333333333334,0.5839527438950042,False,False,False
+Cleanliness & Restroom Hygiene,2026-06-08,10,9.833333333333334,0.0449194418380771,False,False,False
+Cleanliness & Restroom Hygiene,2026-06-15,6,10.333333333333334,-1.63010205337045,False,False,False
+Cleanliness & Restroom Hygiene,2026-06-22,8,9.333333333333334,-0.6454972243679106,False,False,False
+Cleanliness & Restroom Hygiene,2026-06-29,6,8.666666666666666,-1.1009637651263688,False,False,False
+Cleanliness & Restroom Hygiene,2026-07-06,6,8.0,-0.7905694150421,False,False,False
+Cleanliness & Restroom Hygiene,2026-07-13,6,7.0,-0.5976143046672042,False,False,False
+Cleanliness & Restroom Hygiene,2026-07-20,6,6.333333333333333,-0.40824829046388134,False,False,False
+Cleanliness & Restroom Hygiene,2026-07-27,5,6.166666666666667,-1.1866111313364545,False,False,False
+Food Quantity & Value for Money,2025-07-28,7,,,False,True,False
+Food Quantity & Value for Money,2025-08-04,19,,,False,True,False
+Food Quantity & Value for Money,2025-08-11,25,17.0,0.8728715609439696,False,False,False
+Food Quantity & Value for Money,2025-08-18,25,19.0,0.7071067811865476,False,False,False
+Food Quantity & Value for Money,2025-08-25,21,19.4,0.21613729078331986,False,False,False
+Food Quantity & Value for Money,2025-09-01,21,19.666666666666668,0.2004012040140504,False,False,False
+Food Quantity & Value for Money,2025-09-08,22,22.166666666666668,-0.06940429153883616,False,False,False
+Food Quantity & Value for Money,2025-09-15,20,22.333333333333332,-1.0801234497346412,False,False,False
+Food Quantity & Value for Money,2025-09-22,26,22.5,1.4409271967870798,False,False,False
+Food Quantity & Value for Money,2025-09-29,19,21.5,-1.0292337119907722,False,False,False
+Food Quantity & Value for Money,2025-10-06,23,21.833333333333332,0.469809238649817,False,False,False
+Food Quantity & Value for Money,2025-10-13,24,22.333333333333332,0.6454972243679024,False,False,False
+Food Quantity & Value for Money,2025-10-20,25,22.833333333333332,0.7774541189099284,False,False,False
+Food Quantity & Value for Money,2025-10-27,41,26.333333333333332,1.9347435985051575,False,True,False
+Food Quantity & Value for Money,2025-11-03,20,25.333333333333332,-0.6652821030398852,False,False,False
+Food Quantity & Value for Money,2025-11-10,20,25.5,-0.699064687852925,False,False,False
+Food Quantity & Value for Money,2025-11-17,20,25.0,-0.6136008670922697,False,False,False
+Food Quantity & Value for Money,2025-11-24,54,30.0,1.678691131177598,False,True,False
+Food Quantity & Value for Money,2025-12-01,22,29.5,-0.5152236441509777,False,False,False
+Food Quantity & Value for Money,2025-12-08,27,27.166666666666668,-0.012416852662165294,False,False,False
+Food Quantity & Value for Money,2025-12-15,24,27.833333333333332,-0.2928285459947734,False,False,False
+Food Quantity & Value for Money,2025-12-22,26,28.833333333333332,-0.225004768750218,False,False,False
+Food Quantity & Value for Money,2025-12-29,19,28.666666666666668,-0.758860741348727,False,False,False
+Food Quantity & Value for Money,2026-01-05,19,22.833333333333332,-1.1175059915592889,False,False,False
+Food Quantity & Value for Money,2026-01-12,19,22.333333333333332,-0.882505637022758,False,False,False
+Food Quantity & Value for Money,2026-01-19,26,22.166666666666668,1.0813506307209335,False,False,False
+Food Quantity & Value for Money,2026-01-26,22,21.833333333333332,0.048587217024317286,False,False,False
+Food Quantity & Value for Money,2026-02-02,20,20.833333333333332,-0.2990208149653561,False,False,False
+Food Quantity & Value for Money,2026-02-09,20,21.0,-0.3726779962499638,False,False,False
+Food Quantity & Value for Money,2026-02-16,21,21.333333333333332,-0.1331559103228259,False,False,False
+Food Quantity & Value for Money,2026-02-23,12,20.166666666666668,-1.7835288314854327,False,False,False
+Food Quantity & Value for Money,2026-03-02,24,19.833333333333332,1.0115573137905574,False,False,False
+Food Quantity & Value for Money,2026-03-09,18,19.166666666666668,-0.29015933530138743,False,False,False
+Food Quantity & Value for Money,2026-03-16,22,19.5,0.5976143046671962,False,False,False
+Food Quantity & Value for Money,2026-03-23,55,25.333333333333332,1.9618568780894539,False,True,False
+Food Quantity & Value for Money,2026-03-30,19,25.0,-0.3932418788198071,False,False,False
+Food Quantity & Value for Money,2026-04-06,21,26.5,-0.3893957789726336,False,False,False
+Food Quantity & Value for Money,2026-04-13,24,26.5,-0.1769980813511971,False,False,False
+Food Quantity & Value for Money,2026-04-20,19,26.666666666666668,-0.5472468973568206,False,False,False
+Food Quantity & Value for Money,2026-04-27,24,27.0,-0.21583292365085774,False,False,False
+Food Quantity & Value for Money,2026-05-04,24,21.833333333333332,0.8725028717782216,False,False,False
+Food Quantity & Value for Money,2026-05-11,13,20.833333333333332,-1.7986683872225815,False,False,False
+Food Quantity & Value for Money,2026-05-18,18,20.333333333333332,-0.5183052680392037,False,False,False
+Food Quantity & Value for Money,2026-05-25,24,20.333333333333332,0.8144797069187493,False,False,False
+Food Quantity & Value for Money,2026-06-01,25,21.333333333333332,0.7634472069271909,False,False,False
+Food Quantity & Value for Money,2026-06-08,18,20.333333333333332,-0.4900980294098016,False,False,False
+Food Quantity & Value for Money,2026-06-15,19,19.5,-0.11322770341445917,False,False,False
+Food Quantity & Value for Money,2026-06-22,19,20.5,-0.47673129462279284,False,False,False
+Food Quantity & Value for Money,2026-06-29,19,20.666666666666668,-0.5535093034625557,False,False,False
+Food Quantity & Value for Money,2026-07-06,25,20.833333333333332,1.2817984867649652,False,False,False
+Food Quantity & Value for Money,2026-07-13,23,20.5,0.8894600837060173,False,False,False
+Food Quantity & Value for Money,2026-07-20,30,22.5,1.6812593987333204,False,False,False
+Food Quantity & Value for Money,2026-07-27,17,22.166666666666668,-1.0688384334250514,False,False,False
+Food Variety & Fast Service,2025-07-28,7,,,False,False,False
+Food Variety & Fast Service,2025-08-04,15,,,False,False,False
+Food Variety & Fast Service,2025-08-11,20,14.0,0.914991421995628,False,False,False
+Food Variety & Fast Service,2025-08-18,15,14.25,0.13947203865909233,False,False,False
+Food Variety & Fast Service,2025-08-25,21,15.6,0.9730124597112036,False,False,False
+Food Variety & Fast Service,2025-09-01,14,15.333333333333334,-0.26631182064565384,False,False,False
+Food Variety & Fast Service,2025-09-08,16,16.833333333333332,-0.28471662021420435,False,False,False
+Food Variety & Fast Service,2025-09-15,10,16.0,-1.4815943949743846,False,False,False
+Food Variety & Fast Service,2025-09-22,13,14.833333333333334,-0.5014525865840697,False,False,False
+Food Variety & Fast Service,2025-09-29,19,15.5,0.8669104580816224,False,False,False
+Food Variety & Fast Service,2025-10-06,14,14.333333333333334,-0.1107018606925121,False,False,False
+Food Variety & Fast Service,2025-10-13,9,13.5,-1.2069940067680953,False,False,False
+Food Variety & Fast Service,2025-10-20,18,13.833333333333334,1.0236964359734848,False,False,False
+Food Variety & Fast Service,2025-10-27,38,18.5,1.9093803867144186,False,True,False
+Food Variety & Fast Service,2025-11-03,38,22.666666666666668,1.2377403436961139,False,True,False
+Food Variety & Fast Service,2025-11-10,20,22.833333333333332,-0.22968778911235965,False,False,False
+Food Variety & Fast Service,2025-11-17,26,24.833333333333332,0.10087251224304433,False,False,False
+Food Variety & Fast Service,2025-11-24,17,26.166666666666668,-0.9466451199128767,False,False,False
+Food Variety & Fast Service,2025-12-01,15,25.666666666666668,-1.0406297715753678,False,False,False
+Food Variety & Fast Service,2025-12-08,14,21.666666666666668,-0.8432209113727814,False,False,False
+Food Variety & Fast Service,2025-12-15,15,17.833333333333332,-0.6247635965657181,False,False,False
+Food Variety & Fast Service,2025-12-22,21,18.0,0.6454972243679017,False,False,False
+Food Variety & Fast Service,2025-12-29,15,16.166666666666668,-0.4552755250642207,False,False,False
+Food Variety & Fast Service,2026-01-05,18,16.333333333333332,0.6269623282193956,False,False,False
+Food Variety & Fast Service,2026-01-12,12,15.833333333333334,-1.2022292590254229,False,False,False
+Food Variety & Fast Service,2026-01-19,14,15.833333333333334,-0.5749792108382459,False,False,False
+Food Variety & Fast Service,2026-01-26,10,15.0,-1.2499999999999956,False,False,False
+Food Variety & Fast Service,2026-02-02,22,15.166666666666666,1.585862888504876,False,False,False
+Food Variety & Fast Service,2026-02-09,21,16.166666666666668,0.983192080250173,False,False,False
+Food Variety & Fast Service,2026-02-16,16,15.833333333333334,0.03447865914274349,False,False,False
+Food Variety & Fast Service,2026-02-23,15,16.333333333333332,-0.29617443887954525,False,False,False
+Food Variety & Fast Service,2026-03-02,19,17.166666666666668,0.4123582761971496,False,False,False
+Food Variety & Fast Service,2026-03-09,17,18.333333333333332,-0.47538268854152615,False,False,False
+Food Variety & Fast Service,2026-03-16,22,18.333333333333332,1.3073023934891985,False,False,False
+Food Variety & Fast Service,2026-03-23,17,17.666666666666668,-0.26631182064565284,False,False,False
+Food Variety & Fast Service,2026-03-30,14,17.333333333333332,-1.1593472394004154,False,False,False
+Food Variety & Fast Service,2026-04-06,18,17.833333333333332,0.06314460253534036,False,False,False
+Food Variety & Fast Service,2026-04-13,19,17.833333333333332,0.4420122177473799,False,False,False
+Food Variety & Fast Service,2026-04-20,9,16.5,-1.6646128560692788,False,False,False
+Food Variety & Fast Service,2026-04-27,55,22.0,1.9921493147172178,False,True,False
+Food Variety & Fast Service,2026-05-04,18,22.166666666666668,-0.2523785185710011,False,False,False
+Food Variety & Fast Service,2026-05-11,13,22.0,-0.5417363388859614,False,False,False
+Food Variety & Fast Service,2026-05-18,21,22.5,-0.09083405243909494,False,False,False
+Food Variety & Fast Service,2026-05-25,13,21.5,-0.5016517475225286,False,False,False
+Food Variety & Fast Service,2026-06-01,15,22.5,-0.46238191503104503,False,False,False
+Food Variety & Fast Service,2026-06-08,41,20.166666666666668,1.9532203744171281,False,True,False
+Food Variety & Fast Service,2026-06-15,18,20.166666666666668,-0.20313491893938146,False,False,False
+Food Variety & Fast Service,2026-06-22,17,20.833333333333332,-0.3741544222686485,False,False,False
+Food Variety & Fast Service,2026-06-29,38,23.666666666666668,1.1540142007657448,False,True,False
+Food Variety & Fast Service,2026-07-06,16,24.166666666666668,-0.6830105844418706,False,False,False
+Food Variety & Fast Service,2026-07-13,11,23.5,-0.9872866210552966,False,False,False
+Food Variety & Fast Service,2026-07-20,13,18.833333333333332,-0.5985923974733207,False,False,False
+Food Variety & Fast Service,2026-07-27,8,17.166666666666668,-0.8549199846470049,False,False,False
+Parking & Accessibility,2025-07-28,8,,,False,False,False
+Parking & Accessibility,2025-08-04,7,,,False,False,False
+Parking & Accessibility,2025-08-11,6,7.0,-1.0,False,False,False
+Parking & Accessibility,2025-08-18,7,7.0,0.0,False,False,False
+Parking & Accessibility,2025-08-25,6,6.8,-0.9561828874675147,False,False,False
+Parking & Accessibility,2025-09-01,10,7.333333333333333,1.7712297710801905,False,False,False
+Parking & Accessibility,2025-09-08,11,7.833333333333333,1.481844710811034,False,False,False
+Parking & Accessibility,2025-09-15,9,8.166666666666666,0.3899591344239565,False,False,False
+Parking & Accessibility,2025-09-22,13,9.333333333333334,1.4200938936093856,False,False,False
+Parking & Accessibility,2025-09-29,13,10.333333333333334,1.0031397251510377,False,False,False
+Parking & Accessibility,2025-10-06,7,10.5,-1.4924050144892722,False,False,False
+Parking & Accessibility,2025-10-13,13,11.0,0.7905694150420944,False,False,False
+Parking & Accessibility,2025-10-20,11,11.0,0.0,False,False,False
+Parking & Accessibility,2025-10-27,9,11.0,-0.7905694150420944,False,False,False
+Parking & Accessibility,2025-11-03,7,10.0,-1.088214375165017,False,False,False
+Parking & Accessibility,2025-11-10,18,10.833333333333334,1.7002556552790278,False,True,False
+Parking & Accessibility,2025-11-17,9,11.166666666666666,-0.5527162925699823,False,False,False
+Parking & Accessibility,2025-11-24,9,10.5,-0.38601375949123395,False,False,False
+Parking & Accessibility,2025-12-01,11,10.5,0.12867125316374464,False,False,False
+Parking & Accessibility,2025-12-08,13,11.166666666666666,0.4676830167899853,False,False,False
+Parking & Accessibility,2025-12-15,12,12.0,0.0,False,False,False
+Parking & Accessibility,2025-12-22,6,10.0,-1.581138830084188,False,False,False
+Parking & Accessibility,2025-12-29,10,10.166666666666666,-0.06711560552140212,False,False,False
+Parking & Accessibility,2026-01-05,5,9.5,-1.3756901411604205,False,False,False
+Parking & Accessibility,2026-01-12,6,8.666666666666666,-0.7741129997161826,False,False,False
+Parking & Accessibility,2026-01-19,8,7.833333333333333,0.06140634384863429,False,False,False
+Parking & Accessibility,2026-01-26,10,7.5,1.1531640100361014,False,False,False
+Parking & Accessibility,2026-02-02,6,7.5,-0.6918984060216609,False,False,False
+Parking & Accessibility,2026-02-09,9,7.333333333333333,0.8475793795260085,False,False,False
+Parking & Accessibility,2026-02-16,13,8.666666666666666,1.6301020533704345,False,False,False
+Parking & Accessibility,2026-02-23,12,9.666666666666666,0.9036961141150632,False,False,False
+Parking & Accessibility,2026-03-02,7,9.5,-0.912870929175276,False,False,False
+Parking & Accessibility,2026-03-09,11,9.666666666666666,0.47538268854152815,False,False,False
+Parking & Accessibility,2026-03-16,9,10.166666666666666,-0.5234971031459833,False,False,False
+Parking & Accessibility,2026-03-23,8,10.0,-0.8451542547285158,False,False,False
+Parking & Accessibility,2026-03-30,12,9.833333333333334,1.0138937495022848,False,False,False
+Parking & Accessibility,2026-04-06,5,8.666666666666666,-1.420093893609384,False,False,False
+Parking & Accessibility,2026-04-13,11,9.333333333333334,0.6454972243679018,False,True,False
+Parking & Accessibility,2026-04-20,9,9.0,0.0,False,False,False
+Parking & Accessibility,2026-04-27,7,8.666666666666666,-0.6454972243679016,False,False,False
+Parking & Accessibility,2026-05-04,11,9.166666666666666,0.6754697823349772,False,False,False
+Parking & Accessibility,2026-05-11,7,8.333333333333334,-0.5504818825631795,False,False,False
+Parking & Accessibility,2026-05-18,8,8.833333333333334,-0.45417026219547385,False,False,False
+Parking & Accessibility,2026-05-25,9,8.5,0.3296902366978921,False,False,False
+Parking & Accessibility,2026-06-01,5,7.833333333333333,-1.38804418757713,False,False,False
+Parking & Accessibility,2026-06-08,14,9.0,1.581138830084188,False,True,False
+Parking & Accessibility,2026-06-15,8,8.5,-0.16574838603294878,False,False,False
+Parking & Accessibility,2026-06-22,9,8.833333333333334,0.05694332404284069,False,False,False
+Parking & Accessibility,2026-06-29,10,9.166666666666666,0.2847166202142047,False,False,False
+Parking & Accessibility,2026-07-06,10,9.333333333333334,0.22645540682891868,False,False,False
+Parking & Accessibility,2026-07-13,9,10.0,-0.4767312946227953,False,False,False
+Parking & Accessibility,2026-07-20,4,8.333333333333334,-1.9251338527170458,False,True,False
+Parking & Accessibility,2026-07-27,7,8.166666666666666,-0.5036101551853335,False,True,False
+Poor Experience & Food Hygiene Complaints,2025-07-28,1,,,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-08-04,5,,,False,True,False
+Poor Experience & Food Hygiene Complaints,2025-08-11,8,4.666666666666667,0.9491579957524989,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-08-18,3,4.25,-0.4186091791394607,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-08-25,4,4.2,-0.07726674092862565,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-09-01,2,3.8333333333333335,-0.7382716607354268,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-09-08,4,4.333333333333333,-0.16137430609197553,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-09-15,6,4.5,0.6918984060216639,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-09-22,1,3.3333333333333335,-1.3324272283470413,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-09-29,2,3.1666666666666665,-0.6358383670736644,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-10-06,8,3.8333333333333335,1.535158596215858,False,True,False
+Poor Experience & Food Hygiene Complaints,2025-10-13,2,3.8333333333333335,-0.6754697823349777,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-10-20,3,3.6666666666666665,-0.24397501823713322,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-10-27,5,3.5,0.5795005569646917,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-11-03,2,3.6666666666666665,-0.6881023532039752,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-11-10,30,8.333333333333334,1.995706175080616,False,True,False
+Poor Experience & Food Hygiene Complaints,2025-11-24,8,8.333333333333334,-0.030703171924317225,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-12-01,6,9.0,-0.28552012036008034,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-12-08,3,9.0,-0.5710402407201607,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-12-15,2,8.5,-0.6016971142604393,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-12-22,3,8.666666666666666,-0.5301123076594344,False,False,False
+Poor Experience & Food Hygiene Complaints,2025-12-29,2,4.0,-0.8164965809277221,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-01-05,4,3.3333333333333335,0.44280744277004125,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-01-12,8,3.6666666666666665,1.9251338527170385,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-01-19,5,4.0,0.4385290096535121,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-01-26,8,5.0,1.1858541225631374,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-02-02,2,4.833333333333333,-1.0439078454267798,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-02-09,5,5.333333333333333,-0.14256648712804948,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-02-16,3,5.166666666666667,-0.8725028717782279,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-02-23,4,4.5,-0.24112141108520446,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-03-02,2,4.0,-0.8770580193070242,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-03-09,5,3.5,1.0882143751649997,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-03-16,1,3.3333333333333335,-1.4288690166235039,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-03-23,4,3.1666666666666665,0.5661385170722896,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-03-30,4,3.3333333333333335,0.4428074427700414,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-04-06,1,2.8333333333333335,-1.0644053746097406,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-04-13,2,2.8333333333333335,-0.4838206248226094,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-04-20,39,8.5,2.032881632043003,True,True,True
+Poor Experience & Food Hygiene Complaints,2026-04-27,4,9.0,-0.33895384034165027,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-05-04,3,8.833333333333334,-0.39349197845065453,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-05-11,5,9.0,-0.2709141845914385,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-05-18,3,9.333333333333334,-0.43470180772748235,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-05-25,7,10.166666666666666,-0.22293468402436392,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-06-01,19,6.833333333333333,1.9797815933580232,False,True,False
+Poor Experience & Food Hygiene Complaints,2026-06-08,5,7.0,-0.3296902366978934,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-06-15,4,7.166666666666667,-0.5324824346382147,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-06-22,6,7.333333333333333,-0.226455406828919,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-06-29,4,7.5,-0.6083507495196231,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-07-06,5,7.166666666666667,-0.3706728665329306,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-07-13,5,4.833333333333333,0.22140372138502043,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-07-20,2,4.333333333333333,-1.7078251276599243,False,False,False
+Poor Experience & Food Hygiene Complaints,2026-07-27,1,3.8333333333333335,-1.45988644646704,False,False,False
+Service Quality,2025-07-28,6,,,False,True,False
+Service Quality,2025-08-04,15,,,False,True,False
+Service Quality,2025-08-11,20,13.666666666666666,0.8926978728963852,False,False,False
+Service Quality,2025-08-18,13,13.5,-0.08617274844321392,False,False,False
+Service Quality,2025-08-25,13,13.4,-0.07952427724875448,False,False,False
+Service Quality,2025-09-01,12,13.166666666666666,-0.25725559858588437,False,False,False
+Service Quality,2025-09-08,15,14.666666666666666,0.1159347239400423,False,False,False
+Service Quality,2025-09-15,21,15.666666666666666,1.3740107731454527,False,False,False
+Service Quality,2025-09-22,9,13.833333333333334,-1.202088674820034,False,False,False
+Service Quality,2025-09-29,12,13.666666666666666,-0.40824829046386296,False,False,False
+Service Quality,2025-10-06,14,13.833333333333334,0.04094785743893926,False,False,False
+Service Quality,2025-10-13,14,14.166666666666666,-0.04197385004244274,False,False,False
+Service Quality,2025-10-20,14,14.0,0.0,False,False,False
+Service Quality,2025-10-27,15,13.0,0.9128709291752769,False,False,False
+Service Quality,2025-11-03,22,15.166666666666666,1.9590557785267364,False,False,False
+Service Quality,2025-11-10,13,15.333333333333334,-0.7014042140491773,False,False,False
+Service Quality,2025-11-17,16,15.666666666666666,0.10206207261596595,False,False,False
+Service Quality,2025-11-24,10,15.0,-1.2500000000000002,False,False,False
+Service Quality,2025-12-01,13,14.833333333333334,-0.45042643182833364,False,False,False
+Service Quality,2025-12-08,12,14.333333333333334,-0.5520202606419481,False,False,False
+Service Quality,2025-12-15,21,14.166666666666666,1.7663227523106773,False,False,False
+Service Quality,2025-12-22,9,13.5,-1.0190493307301363,False,False,False
+Service Quality,2025-12-29,12,12.833333333333334,-0.19551547175144396,False,False,False
+Service Quality,2026-01-05,17,14.0,0.6993786061802354,False,False,False
+Service Quality,2026-01-12,13,14.0,-0.23312620206007847,False,False,False
+Service Quality,2026-01-19,10,13.666666666666666,-0.8065591326174432,False,False,False
+Service Quality,2026-01-26,19,13.333333333333334,1.4408849451942223,False,False,False
+Service Quality,2026-02-02,38,18.166666666666668,1.9321644642810496,False,True,False
+Service Quality,2026-02-09,14,18.5,-0.44754523336199714,False,False,False
+Service Quality,2026-02-16,9,17.166666666666668,-0.7564106603075975,False,False,False
+Service Quality,2026-02-23,23,18.833333333333332,0.38592380627938655,False,True,False
+Service Quality,2026-03-02,14,19.5,-0.5364896296670117,False,False,False
+Service Quality,2026-03-09,18,19.333333333333332,-0.12983181444523034,False,False,False
+Service Quality,2026-03-16,15,15.5,-0.106843460792672,False,False,False
+Service Quality,2026-03-23,15,15.666666666666666,-0.14388861576723835,False,False,False
+Service Quality,2026-03-30,16,16.833333333333332,-0.2516410173661554,False,False,False
+Service Quality,2026-04-06,15,15.5,-0.362738125055004,False,False,False
+Service Quality,2026-04-13,13,15.333333333333334,-1.4288690166235154,False,False,False
+Service Quality,2026-04-20,48,20.333333333333332,2.035928784817183,True,True,True
+Service Quality,2026-04-27,13,20.0,-0.5083687820523609,False,False,False
+Service Quality,2026-05-04,15,20.0,-0.36312055860882925,False,False,False
+Service Quality,2026-05-11,9,18.833333333333332,-0.6802401372563635,False,False,False
+Service Quality,2026-05-18,9,17.833333333333332,-0.589982462512125,False,False,False
+Service Quality,2026-05-25,18,18.666666666666668,-0.0450834817333717,False,False,False
+Service Quality,2026-06-01,17,13.5,0.900698772146212,False,False,False
+Service Quality,2026-06-08,10,13.0,-0.7233642332556175,False,False,False
+Service Quality,2026-06-15,16,13.166666666666666,0.6647526039549082,False,False,False
+Service Quality,2026-06-22,15,14.166666666666666,0.22140372138502382,False,False,False
+Service Quality,2026-06-29,9,14.166666666666666,-1.3727030725871465,False,False,False
+Service Quality,2026-07-06,22,14.833333333333334,1.4954373439032458,False,False,False
+Service Quality,2026-07-13,15,14.5,0.10684346079267203,False,False,False
+Service Quality,2026-07-20,14,15.166666666666666,-0.27995521074913343,False,False,False
+Service Quality,2026-07-27,9,14.0,-1.0380684981717492,False,False,False
+Slow Service & Staff Negligence,2025-07-28,6,,,False,False,False
+Slow Service & Staff Negligence,2025-08-04,14,,,False,False,False
+Slow Service & Staff Negligence,2025-08-11,8,9.333333333333334,-0.3202563076101744,False,False,False
+Slow Service & Staff Negligence,2025-08-18,15,10.75,0.9603855608722545,False,False,False
+Slow Service & Staff Negligence,2025-08-25,18,12.2,1.155387655689914,False,False,False
+Slow Service & Staff Negligence,2025-09-01,22,13.833333333333334,1.3579712889105482,False,False,False
+Slow Service & Staff Negligence,2025-09-08,10,14.5,-0.8774747729629105,False,False,False
+Slow Service & Staff Negligence,2025-09-15,13,14.333333333333334,-0.2581988897471612,False,False,False
+Slow Service & Staff Negligence,2025-09-22,9,14.5,-1.1157311356586717,False,False,False
+Slow Service & Staff Negligence,2025-09-29,7,13.166666666666666,-1.0675643492050675,False,False,False
+Slow Service & Staff Negligence,2025-10-06,11,12.0,-0.1889822365046136,False,False,False
+Slow Service & Staff Negligence,2025-10-13,10,10.0,0.0,False,False,False
+Slow Service & Staff Negligence,2025-10-20,5,9.166666666666666,-1.4580296087995106,False,True,False
+Slow Service & Staff Negligence,2025-10-27,13,9.166666666666666,1.3413872400955502,False,True,False
+Slow Service & Staff Negligence,2025-11-03,15,10.166666666666666,1.3026638133042356,False,False,False
+Slow Service & Staff Negligence,2025-11-10,13,11.166666666666666,0.5256003308242463,False,False,False
+Slow Service & Staff Negligence,2025-11-17,10,11.0,-0.28398091712353235,False,False,False
+Slow Service & Staff Negligence,2025-11-24,22,13.0,1.601028150670845,False,True,False
+Slow Service & Staff Negligence,2025-12-01,18,15.166666666666666,0.664752603954909,False,False,False
+Slow Service & Staff Negligence,2025-12-08,11,14.833333333333334,-0.8452683953536206,False,False,False
+Slow Service & Staff Negligence,2025-12-15,11,14.166666666666666,-0.6607746403293414,False,False,False
+Slow Service & Staff Negligence,2025-12-22,11,13.833333333333334,-0.5716425586281312,False,False,False
+Slow Service & Staff Negligence,2025-12-29,14,14.5,-0.10885008604602703,False,False,False
+Slow Service & Staff Negligence,2026-01-05,14,13.166666666666666,0.29902081496535765,False,False,False
+Slow Service & Staff Negligence,2026-01-12,12,12.166666666666666,-0.11322770341445937,False,False,False
+Slow Service & Staff Negligence,2026-01-19,16,13.0,1.5000000000000004,False,False,False
+Slow Service & Staff Negligence,2026-01-26,8,12.5,-1.601028150670846,False,False,False
+Slow Service & Staff Negligence,2026-02-02,36,16.666666666666668,1.9623283621077794,False,True,False
+Slow Service & Staff Negligence,2026-02-09,9,15.833333333333334,-0.661945014460189,False,False,False
+Slow Service & Staff Negligence,2026-02-16,12,15.5,-0.3357014926691759,False,False,False
+Slow Service & Staff Negligence,2026-02-23,11,15.333333333333334,-0.41266722209921475,False,False,False
+Slow Service & Staff Negligence,2026-03-02,10,14.333333333333334,-0.4046723241370488,False,False,False
+Slow Service & Staff Negligence,2026-03-09,10,14.666666666666666,-0.444410854568385,False,False,False
+Slow Service & Staff Negligence,2026-03-16,10,10.333333333333334,-0.3227486121839541,False,False,False
+Slow Service & Staff Negligence,2026-03-23,15,11.333333333333334,1.8646746349572298,False,False,False
+Slow Service & Staff Negligence,2026-03-30,18,12.333333333333334,1.673435865786085,False,False,False
+Slow Service & Staff Negligence,2026-04-06,12,12.5,-0.15007505629691603,False,False,False
+Slow Service & Staff Negligence,2026-04-13,16,13.5,0.7503752814845798,False,False,False
+Slow Service & Staff Negligence,2026-04-20,17,14.666666666666666,0.7583649325305185,False,False,False
+Slow Service & Staff Negligence,2026-04-27,17,15.833333333333334,0.5459427881935367,False,False,False
+Slow Service & Staff Negligence,2026-05-04,16,16.0,0.0,False,False,False
+Slow Service & Staff Negligence,2026-05-11,23,16.833333333333332,1.7395640581162857,False,True,False
+Slow Service & Staff Negligence,2026-05-18,10,16.5,-1.5718652085716904,False,False,False
+Slow Service & Staff Negligence,2026-05-25,13,16.0,-0.6846531968814573,False,False,False
+Slow Service & Staff Negligence,2026-06-01,11,15.0,-0.8377078165833909,False,False,False
+Slow Service & Staff Negligence,2026-06-08,14,14.5,-0.10684346079267207,False,False,False
+Slow Service & Staff Negligence,2026-06-15,15,14.333333333333334,0.14388861576723844,False,False,False
+Slow Service & Staff Negligence,2026-06-22,7,11.666666666666666,-1.5851878478024382,False,False,False
+Slow Service & Staff Negligence,2026-06-29,13,12.166666666666666,0.2916059217599031,False,False,False
+Slow Service & Staff Negligence,2026-07-06,10,11.666666666666666,-0.5661385170722992,False,False,False
+Slow Service & Staff Negligence,2026-07-13,13,12.0,0.33709993123162185,False,False,False
+Slow Service & Staff Negligence,2026-07-20,17,12.5,1.2627304498492078,False,False,False
+Slow Service & Staff Negligence,2026-07-27,16,12.666666666666666,0.8951435925492924,False,False,False
+Staff Courtesy & Behaviour,2025-07-28,5,,,False,False,False
+Staff Courtesy & Behaviour,2025-08-04,8,,,False,False,False
+Staff Courtesy & Behaviour,2025-08-11,3,5.333333333333333,-0.9271726499455306,False,False,False
+Staff Courtesy & Behaviour,2025-08-18,11,6.75,1.2142857142857142,False,True,False
+Staff Courtesy & Behaviour,2025-08-25,9,7.2,0.5636018619766345,False,False,False
+Staff Courtesy & Behaviour,2025-09-01,12,8.0,1.1547005383792517,False,False,False
+Staff Courtesy & Behaviour,2025-09-08,9,8.666666666666666,0.10611908999450241,False,False,False
+Staff Courtesy & Behaviour,2025-09-15,9,8.833333333333334,0.05333048911642403,False,False,False
+Staff Courtesy & Behaviour,2025-09-22,4,9.0,-1.8136906252750293,False,False,False
+Staff Courtesy & Behaviour,2025-09-29,8,8.5,-0.193166852321564,False,False,False
+Staff Courtesy & Behaviour,2025-10-06,5,7.833333333333333,-0.9680365087282966,False,False,False
+Staff Courtesy & Behaviour,2025-10-13,11,7.666666666666667,1.2539246564387982,False,False,False
+Staff Courtesy & Behaviour,2025-10-20,8,7.5,0.19316685232156405,False,False,False
+Staff Courtesy & Behaviour,2025-10-27,7,7.166666666666667,-0.06711560552140258,False,False,False
+Staff Courtesy & Behaviour,2025-11-03,8,7.833333333333333,0.08587567332159099,False,False,False
+Staff Courtesy & Behaviour,2025-11-10,9,8.0,0.5000000000000003,False,False,False
+Staff Courtesy & Behaviour,2025-11-17,6,8.166666666666666,-1.2579336245387989,False,False,False
+Staff Courtesy & Behaviour,2025-11-24,9,7.833333333333333,0.9979654098963538,False,False,False
+Staff Courtesy & Behaviour,2025-12-01,5,7.333333333333333,-1.4288690166235218,False,False,False
+Staff Courtesy & Behaviour,2025-12-08,9,7.666666666666667,0.7613869876268814,False,False,False
+Staff Courtesy & Behaviour,2025-12-15,3,6.833333333333333,-1.4959052966395914,False,False,False
+Staff Courtesy & Behaviour,2025-12-22,8,6.666666666666667,0.5504818825631804,False,False,False
+Staff Courtesy & Behaviour,2025-12-29,5,6.5,-0.5976143046671971,False,False,False
+Staff Courtesy & Behaviour,2026-01-05,14,7.333333333333333,1.6951587590520263,False,False,False
+Staff Courtesy & Behaviour,2026-01-12,9,8.0,0.26352313834736496,False,False,False
+Staff Courtesy & Behaviour,2026-01-19,25,10.666666666666666,1.7991789288248046,False,True,False
+Staff Courtesy & Behaviour,2026-01-26,6,11.166666666666666,-0.6918677707147626,False,False,False
+Staff Courtesy & Behaviour,2026-02-02,7,11.0,-0.528885885347945,False,False,False
+Staff Courtesy & Behaviour,2026-02-09,9,11.666666666666666,-0.3761219585116297,False,False,False
+Staff Courtesy & Behaviour,2026-02-16,4,10.0,-0.7905694150420948,False,False,False
+Staff Courtesy & Behaviour,2026-02-23,4,9.166666666666666,-0.6470138626729927,False,False,False
+Staff Courtesy & Behaviour,2026-03-02,24,9.0,1.9764235376052373,False,True,False
+Staff Courtesy & Behaviour,2026-03-09,6,9.0,-0.39528470752104744,False,False,False
+Staff Courtesy & Behaviour,2026-03-16,11,9.666666666666666,0.17650112740455204,False,False,False
+Staff Courtesy & Behaviour,2026-03-23,8,9.5,-0.19781414201873612,False,False,False
+Staff Courtesy & Behaviour,2026-03-30,9,10.333333333333334,-0.1873171623163389,False,False,False
+Staff Courtesy & Behaviour,2026-04-06,11,11.5,-0.07799182688479128,False,False,False
+Staff Courtesy & Behaviour,2026-04-13,5,8.333333333333334,-1.3315591032282714,False,False,False
+Staff Courtesy & Behaviour,2026-04-20,7,8.5,-0.6396021490668328,False,False,False
+Staff Courtesy & Behaviour,2026-04-27,7,7.833333333333333,-0.40824829046386407,False,False,False
+Staff Courtesy & Behaviour,2026-05-04,9,8.0,0.4767312946227975,False,False,False
+Staff Courtesy & Behaviour,2026-05-11,9,8.0,0.4767312946227975,False,False,False
+Staff Courtesy & Behaviour,2026-05-18,16,8.833333333333334,1.8777471611536118,False,True,False
+Staff Courtesy & Behaviour,2026-05-25,5,8.833333333333334,-1.004376388524025,False,False,False
+Staff Courtesy & Behaviour,2026-06-01,7,8.833333333333334,-0.480353924946273,False,False,False
+Staff Courtesy & Behaviour,2026-06-08,8,9.0,-0.2672612419124246,False,False,False
+Staff Courtesy & Behaviour,2026-06-15,39,14.0,1.952172023607576,False,True,False
+Staff Courtesy & Behaviour,2026-06-22,11,14.333333333333334,-0.2629758415191085,False,False,False
+Staff Courtesy & Behaviour,2026-06-29,8,13.0,-0.38807526285316646,False,False,False
+Staff Courtesy & Behaviour,2026-07-06,6,13.166666666666666,-0.5613940610154061,False,False,False
+Staff Courtesy & Behaviour,2026-07-13,5,12.833333333333334,-0.6033381094375281,False,False,False
+Staff Courtesy & Behaviour,2026-07-20,12,13.5,-0.11730928305086626,False,False,False
+Staff Courtesy & Behaviour,2026-07-27,7,8.166666666666666,-0.4186291409515005,False,False,False
