@@ -1,537 +1,840 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2026)
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+module6_reputation_early_warning_app.py
 
-from __future__ import annotations
+Module 6 — Reputation Early-Warning & Resolution System (detailed build)
 
-import json
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, cast
+Reuses your existing HDBSCAN + LLM issue categories directly (no separate
+NLP system) and organizes the workflow into four detailed pages:
 
-from streamlit.components.v2.bidi_component.constants import (
-    EVENT_DELIM,
-    INTERNAL_COMPONENT_NAME,
-)
-from streamlit.components.v2.bidi_component.serialization import (
-    BidiComponentSerde,
-    deserialize_trigger_list,
-    serialize_mixed_data,
-)
-from streamlit.components.v2.bidi_component.state import (
-    ComponentResult,
-    unwrap_component_state,
-)
-from streamlit.components.v2.presentation import make_bidi_component_presenter
-from streamlit.dataframe_util import (
-    DataFormat,
-    convert_anything_to_arrow_bytes,
-    determine_data_format,
-)
-from streamlit.elements.lib.form_utils import current_form_id
-from streamlit.elements.lib.layout_utils import (
-    Height,
-    LayoutConfig,
-    Width,
-    validate_width,
-)
-from streamlit.elements.lib.policies import check_cache_replay_rules
-from streamlit.elements.lib.utils import compute_and_register_element_id, to_key
-from streamlit.errors import (
-    BidiComponentInvalidCallbackNameError,
-    BidiComponentInvalidDefaultKeyError,
-    BidiComponentInvalidIdError,
-    BidiComponentUnserializableDataError,
-)
-from streamlit.proto.ArrowData_pb2 import ArrowData as ArrowDataProto
-from streamlit.proto.BidiComponent_pb2 import BidiComponent as BidiComponentProto
-from streamlit.proto.BidiComponent_pb2 import MixedData as MixedDataProto
-from streamlit.runtime.metrics_util import gather_metrics
-from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
-from streamlit.runtime.state import register_widget
-from streamlit.util import calc_hash
+  TAB 1 — Reputation Risk Score
+      Branch-level score (0-100, higher = healthier), rolled up by
+      restaurant chain. Charts are shown RESTAURANT-WISE -> BRANCH-WISE
+      (small multiples, one panel per restaurant, branches on the x-axis
+      inside each panel). The results table includes RESTAURANT and
+      SOURCE (Google / Zomato / TripAdvisor) as explicit columns.
 
-if TYPE_CHECKING:
-    from streamlit.components.v2.types import (
-        BidiComponentData,
-        BidiComponentDefaults,
-        BidiComponentKey,
-        ComponentIsolateStyles,
+  TAB 2 — Early-Warning Alerts (week-over-week spike detection)
+      Per (restaurant, branch, issue_category): compares this week's
+      complaint count to last week's. Flags anything above a configurable
+      spike threshold. Each alert can be expanded to see which platform
+      (source) the spike is coming from.
+
+  TAB 3 — Complaint-to-Resolution Workflow
+      Each alert moves through New -> Assigned -> In Progress -> Resolved
+      / Monitoring / Escalate. Manager logs an owner, action taken and
+      action date. The app auto-compares complaint volume before vs.
+      after the action date (Module 6 roadmap Step 5) and shows a
+      Resolved / Still Emerging / Escalate verdict. Persists to a local
+      CSV (resolution_tracker.csv) so it survives Streamlit reruns.
+
+  TAB 4 — Response Draft Generator
+      Manager-facing draft reply for a selected review, with tone and
+      platform (source) controls, since a Google reply reads differently
+      to a Zomato/Swiggy reply. Template-based by default (no external
+      API key needed). If GROQ_API_KEY is set, uses Groq for a more
+      natural draft — optional, clearly flagged, template fallback is
+      fully functional on its own for the demo/viva.
+
+--------------------------------------------------------------------
+HOW TO RUN
+--------------------------------------------------------------------
+    pip install streamlit pandas numpy plotly openpyxl
+    # optional, only if you want LLM-drafted responses:
+    pip install groq
+    streamlit run module6_reputation_early_warning_app.py
+
+--------------------------------------------------------------------
+EXPECTED INPUT COLUMNS (edit CONFIG below to match your file)
+--------------------------------------------------------------------
+    restaurant     -> chain name, e.g. "Sangeetha", "A2B (Adyar Ananda Bhavan)"
+    branch         -> specific outlet/branch name (108 branches total)
+    source         -> platform: "Google" / "Zomato" / "TripAdvisor"
+    rating         -> numeric star rating (1-5)
+    issue_category -> HDBSCAN + LLM cluster label (e.g. "Service Quality")
+    review_text    -> raw review text (used for response drafting)
+    review_date    -> date the review was posted (needed for trend/spike
+                       detection). If your cleaned file doesn't have this
+                       yet, add it from the raw scraped data before running.
+
+If `restaurant` or `source` are missing from your file, the app will
+still run (it fills them with "Unknown Restaurant" / "Unknown Source"
+and shows a warning) but you'll lose the restaurant/branch drill-down
+and platform breakdown that this build adds — best to include them.
+--------------------------------------------------------------------
+"""
+
+import os
+from datetime import timedelta
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+import plotly.express as px
+
+# ============================== CONFIG ==============================
+
+# NOTE: this file (main.py) is expected to sit at the ROOT of the repo,
+# with a sibling "outputs/" folder also at the repo root. If you instead
+# move this script into a subfolder (e.g. scripts/main.py), change this
+# back to os.path.dirname(os.path.dirname(os.path.abspath(__file__))).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(
+    BASE_DIR,
+    "outputs",
+    "cleaned_reviews.xlsx",
+)  # .xlsx or .csv
+CLUSTER_PATH = os.path.join(
+    BASE_DIR,
+    "outputs",
+    "issues",
+    "hdbscan_clustered_reviews.xlsx",
+)
+LABEL_PATH = os.path.join(
+    BASE_DIR,
+    "outputs",
+    "issues",
+    "cluster_topics_labeled.xlsx",
+)
+NEW_REVIEWS_PATH = os.path.join(BASE_DIR, "new_reviews.csv")
+
+RESTAURANT_COLUMN = "restaurant"
+BRANCH_COLUMN = "branch"
+SOURCE_COLUMN = "source"
+RATING_COLUMN = "rating"
+ISSUE_CATEGORY_COLUMN = "issue_category"
+TEXT_COLUMN = "review_text"
+DATE_COLUMN = "review_date"        # must be parseable as a date
+NOISE_LABELS = ["Noise", "noise", "-1", -1]
+
+NEGATIVE_ISSUE_CATEGORIES = [
+    "Food Quantity & Value for Money",
+    "Slow Service & Staff Negligence",
+    "Service Quality",
+    "Poor Experience & Food Hygiene Complaints",
+    "Service Issues",
+    "Crowd and Wait Time",
+    "Food Quality Issues",
+]
+
+SATISFACTION_THRESHOLD = 4
+
+# Week-over-week increase (%) at which an issue is flagged as an alert.
+# 100% = complaint count has doubled vs the prior week.
+SPIKE_THRESHOLD_PCT = 75
+
+# Minimum complaint count this week to even consider an alert
+# (avoids flagging noise like "1 -> 2 complaints" as a 100% spike).
+MIN_WEEKLY_COUNT_FOR_ALERT = 3
+
+TRACKER_PATH = "resolution_tracker.csv"   # persists alert statuses across runs
+RESOLUTION_WINDOW_DAYS = 14                # "before vs after" comparison window
+
+USE_GROQ = bool(os.environ.get("GROQ_API_KEY"))  # optional LLM-drafted responses
+
+STATUS_OPTIONS = ["New", "Assigned", "In Progress", "Resolved", "Monitoring", "Escalate"]
+DISPLAY_REVIEW_COUNT = 5909
+
+
+def analyze_new_review(review_text: str, rating: int) -> dict:
+    """Provide an explainable first-pass analysis for a newly submitted review."""
+    text = review_text.lower()
+    negative_terms = ["bad", "poor", "worst", "slow", "rude", "dirty", "hair", "cold", "late", "delay", "terrible", "awful"]
+    positive_terms = ["good", "great", "excellent", "amazing", "delicious", "friendly", "love", "best"]
+    issue_rules = [
+        ("Slow Service & Staff Negligence", ["slow", "wait", "delay", "late", "staff", "service", "rude"]),
+        ("Food Quality Issues", ["food", "taste", "cold", "stale", "hair", "raw", "quality"]),
+        ("Poor Experience & Food Hygiene Complaints", ["dirty", "hygiene", "unclean", "hair", "stain"]),
+        ("Pricing & Value Concerns", ["price", "expensive", "cost", "overpriced", "value"]),
+    ]
+    issue = next((label for label, terms in issue_rules if any(term in text for term in terms)), "General Feedback")
+    negative_hits = sum(term in text for term in negative_terms)
+    positive_hits = sum(term in text for term in positive_terms)
+    if rating <= 2 or negative_hits > positive_hits:
+        sentiment = "Negative"
+    elif rating >= 4 or positive_hits > negative_hits:
+        sentiment = "Positive"
+    else:
+        sentiment = "Neutral"
+    severity = "High" if rating <= 1 or negative_hits >= 3 else "Medium" if sentiment == "Negative" else "Low"
+    return {"sentiment": sentiment, "issue": issue, "severity": severity}
+
+
+def load_new_reviews() -> pd.DataFrame:
+    if not os.path.exists(NEW_REVIEWS_PATH):
+        return pd.DataFrame()
+    return pd.read_csv(NEW_REVIEWS_PATH)
+
+# ======================================================================
+
+
+@st.cache_data
+def load_data(path: str) -> pd.DataFrame:
+    if path.endswith(".xlsx"):
+        df = pd.read_excel(path)
+    else:
+        df = pd.read_csv(path)
+
+    if "cluster" not in df.columns and os.path.exists(CLUSTER_PATH):
+        cluster_df = pd.read_excel(CLUSTER_PATH)
+        if len(cluster_df) == len(df) and "cluster" in cluster_df.columns:
+            df["cluster"] = cluster_df["cluster"].to_numpy()
+
+    if "cluster" in df.columns and os.path.exists(LABEL_PATH):
+        labels = pd.read_excel(LABEL_PATH)
+        if {"cluster_id", "issue_label"}.issubset(labels.columns):
+            label_map = labels.set_index("cluster_id")["issue_label"]
+            mapped_labels = df["cluster"].map(label_map)
+            if ISSUE_CATEGORY_COLUMN in df.columns:
+                df[ISSUE_CATEGORY_COLUMN] = mapped_labels.combine_first(df[ISSUE_CATEGORY_COLUMN])
+            else:
+                df[ISSUE_CATEGORY_COLUMN] = mapped_labels
+            df.loc[df["cluster"] == -1, ISSUE_CATEGORY_COLUMN] = "Noise"
+
+    if TEXT_COLUMN not in df.columns and "review" in df.columns:
+        df[TEXT_COLUMN] = df["review"]
+    if ISSUE_CATEGORY_COLUMN not in df.columns and "cluster" in df.columns:
+        df[ISSUE_CATEGORY_COLUMN] = "Cluster " + df["cluster"].astype(str)
+    if ISSUE_CATEGORY_COLUMN not in df.columns:
+        df[ISSUE_CATEGORY_COLUMN] = "Unknown Issue"
+    else:
+        df[ISSUE_CATEGORY_COLUMN] = df[ISSUE_CATEGORY_COLUMN].fillna("Unknown Issue")
+
+    new_reviews = load_new_reviews()
+    if not new_reviews.empty:
+        df = pd.concat([df, new_reviews], ignore_index=True)
+
+    if RATING_COLUMN not in df.columns:
+        df[RATING_COLUMN] = 3.0
+    if DATE_COLUMN not in df.columns:
+        df[DATE_COLUMN] = pd.Timestamp.today().normalize()
+    if SOURCE_COLUMN not in df.columns and "source_file" in df.columns:
+        source_text = df["source_file"].astype(str).str.lower()
+        df[SOURCE_COLUMN] = np.select(
+            [
+                source_text.str.contains("google"),
+                source_text.str.contains("zomato"),
+                source_text.str.contains("trip advisor|tripadvisor"),
+            ],
+            ["Google", "Zomato", "TripAdvisor"],
+            default="Unknown Source",
+        )
+
+    required = [RATING_COLUMN, BRANCH_COLUMN, ISSUE_CATEGORY_COLUMN, DATE_COLUMN]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing expected column(s) {missing} in {path}. "
+            f"Found columns: {list(df.columns)}. "
+            f"Note: Module 6 needs a review date column for trend detection."
+        )
+
+    if RESTAURANT_COLUMN not in df.columns:
+        st.warning(
+            f"Column '{RESTAURANT_COLUMN}' not found — restaurant-wise views will "
+            f"show a single 'Unknown Restaurant' group. Add this column for the "
+            f"full restaurant → branch drill-down."
+        )
+        df[RESTAURANT_COLUMN] = "Unknown Restaurant"
+
+    if SOURCE_COLUMN not in df.columns:
+        st.warning(
+            f"Column '{SOURCE_COLUMN}' not found — platform breakdown will show a "
+            f"single 'Unknown Source' group. Add this column (Google/Zomato/"
+            f"TripAdvisor) for the full platform breakdown."
+        )
+        df[SOURCE_COLUMN] = "Unknown Source"
+
+    df[RESTAURANT_COLUMN] = df[RESTAURANT_COLUMN].fillna("Unknown Restaurant").astype(str).str.strip()
+    df[BRANCH_COLUMN] = df[BRANCH_COLUMN].fillna("Unknown Branch").astype(str).str.strip()
+    df[SOURCE_COLUMN] = df[SOURCE_COLUMN].fillna("Unknown Source").astype(str).str.strip()
+    df[DATE_COLUMN] = pd.to_datetime(df[DATE_COLUMN], errors="coerce")
+    df = df.dropna(subset=[DATE_COLUMN])
+    df["week"] = df[DATE_COLUMN].dt.to_period("W").apply(lambda p: p.start_time)
+    df[ISSUE_CATEGORY_COLUMN] = df[ISSUE_CATEGORY_COLUMN].astype(str)
+    df = df[~df[ISSUE_CATEGORY_COLUMN].isin([str(x) for x in NOISE_LABELS])]
+    return df
+
+
+# ---------------------------------------------------------------------
+# TAB 1 — Reputation Risk Score (restaurant -> branch, with source mix)
+# ---------------------------------------------------------------------
+def compute_reputation_risk(df: pd.DataFrame) -> pd.DataFrame:
+    is_negative = df[ISSUE_CATEGORY_COLUMN].isin(NEGATIVE_ISSUE_CATEGORIES)
+    latest_date = df[DATE_COLUMN].max()
+    recent_cutoff = latest_date - timedelta(days=30)
+    prior_cutoff = latest_date - timedelta(days=60)
+
+    recent = df[df[DATE_COLUMN] >= recent_cutoff]
+    prior = df[(df[DATE_COLUMN] >= prior_cutoff) & (df[DATE_COLUMN] < recent_cutoff)]
+
+    rows = []
+    group_cols = [RESTAURANT_COLUMN, BRANCH_COLUMN]
+    for (restaurant, branch), g in df.groupby(group_cols):
+        mask = (df[RESTAURANT_COLUMN] == restaurant) & (df[BRANCH_COLUMN] == branch)
+        g_recent = recent[(recent[RESTAURANT_COLUMN] == restaurant) & (recent[BRANCH_COLUMN] == branch)]
+        g_prior = prior[(prior[RESTAURANT_COLUMN] == restaurant) & (prior[BRANCH_COLUMN] == branch)]
+
+        avg_rating = g[RATING_COLUMN].mean()
+        negative_rate = is_negative[mask].mean()
+        positive_rate = (g[RATING_COLUMN] >= SATISFACTION_THRESHOLD).mean()
+
+        recent_avg = g_recent[RATING_COLUMN].mean() if len(g_recent) else avg_rating
+        prior_avg = g_prior[RATING_COLUMN].mean() if len(g_prior) else recent_avg
+        rating_trend = recent_avg - prior_avg  # negative = worsening
+
+        rows.append({
+            RESTAURANT_COLUMN: restaurant,
+            BRANCH_COLUMN: branch,
+            "review_count": len(g),
+            "avg_rating": avg_rating,
+            "positive_rate": positive_rate,
+            "negative_issue_rate": negative_rate,
+            "rating_trend_30d": rating_trend,
+        })
+
+    result = pd.DataFrame(rows)
+
+    # Normalize components to 0-1 (globally, across all branches), then
+    # combine into a 0-100 risk score (higher = healthier reputation).
+    result["rating_norm"] = (result["avg_rating"] - result["avg_rating"].min()) / (
+        result["avg_rating"].max() - result["avg_rating"].min() + 1e-9
+    )
+    result["trend_norm"] = (result["rating_trend_30d"] - result["rating_trend_30d"].min()) / (
+        result["rating_trend_30d"].max() - result["rating_trend_30d"].min() + 1e-9
     )
 
-if TYPE_CHECKING:
-    # Define DeltaGenerator for type checking the dg property
-    from streamlit.delta_generator import DeltaGenerator
-    from streamlit.runtime.state.common import WidgetCallback
+    result["reputation_score"] = 100 * (
+        0.35 * result["rating_norm"]
+        + 0.25 * result["positive_rate"]
+        + 0.20 * (1 - result["negative_issue_rate"])
+        + 0.20 * result["trend_norm"]
+    )
 
-
-def _make_trigger_id(base: str, event: str) -> str:
-    """Construct the per-event *trigger widget* identifier.
-
-    The widget ID for a trigger is derived from the *base* component ID plus
-    an *event* name. We join those two parts with :py:const:`EVENT_DELIM` and
-    perform a couple of validations so that downstream logic can always split
-    the identifier unambiguously.
-
-    Trigger widgets are marked as internal by prefixing with an internal key prefix,
-    so they won't be exposed in `st.session_state` to end users.
-
-    Parameters
-    ----------
-    base
-        The unique, framework-assigned ID of the component instance.
-    event
-        The event name as provided by either the frontend or the developer
-        (e.g., "click", "change").
-
-    Returns
-    -------
-    str
-        The composite widget ID in the form ``"$$STREAMLIT_INTERNAL_KEY_{base}__{event}"``
-        where ``__`` is the delimiter.
-
-    Raises
-    ------
-    StreamlitAPIException
-        If either `base` or `event` already contains the delimiter sequence.
-
-    """
-    from streamlit.runtime.state.session_state import STREAMLIT_INTERNAL_KEY_PREFIX
-
-    if EVENT_DELIM in base:
-        raise BidiComponentInvalidIdError("base", EVENT_DELIM)
-    if EVENT_DELIM in event:
-        raise BidiComponentInvalidIdError("event", EVENT_DELIM)
-
-    return f"{STREAMLIT_INTERNAL_KEY_PREFIX}_{base}{EVENT_DELIM}{event}"
-
-
-class BidiComponentMixin:
-    """Mixin class for the bidi_component DeltaGenerator method."""
-
-    def _canonicalize_json_for_identity(self, payload: str) -> str:
-        """Return a deterministic JSON string for identity comparisons.
-
-        Payloads that cannot be parsed (or re-serialized) are returned as-is to
-        avoid mutating developer data.
-        """
-
-        if not payload:
-            return payload
-
-        try:
-            parsed = json.loads(payload)
-        except (TypeError, ValueError):
-            return payload
-
-        try:
-            return json.dumps(parsed, sort_keys=True)
-        except (TypeError, ValueError):
-            return payload
-
-    def _canonical_json_digest_for_identity(self, payload: str) -> str:
-        """Return the hash of the canonicalized JSON payload for identity use.
-
-        Hashing keeps the kwargs passed to ``compute_and_register_element_id``
-        small even when the JSON payload is very large, while still changing the
-        identity whenever the canonical JSON content changes.
-        """
-
-        canonical = self._canonicalize_json_for_identity(payload)
-        return calc_hash(canonical)
-
-    def _build_bidi_identity_kwargs(
-        self,
-        *,
-        component_name: str,
-        isolate_styles: bool,
-        width: Width,
-        height: Height,
-        proto: BidiComponentProto,
-        data: BidiComponentData = None,
-        default: BidiComponentDefaults = None,
-    ) -> dict[str, Any]:
-        """Build deterministic identity kwargs for ID computation.
-
-        Construct a stable mapping of identity-relevant properties for
-        ``compute_and_register_element_id``. This includes structural
-        properties (name, style isolation, layout), default state values, and
-        an explicit, typed handling of the ``BidiComponent`` ``oneof data``
-        field to ensure unkeyed components change identity when their
-        serialized payload or defaults change.
-
-        Parameters
-        ----------
-        component_name : str
-            The registered component name.
-        isolate_styles : bool
-            Whether the component styles are rendered in a Shadow DOM.
-        width : Width
-            Desired width configuration passed to the component.
-        height : Height
-            Desired height configuration passed to the component.
-        proto : BidiComponentProto
-            The populated component protobuf. Its ``data`` oneof determines
-            which serialized payload (JSON, Arrow, bytes, or Mixed) contributes
-            to identity.
-        data : BidiComponentData, optional
-            The raw data passed to the component. Used to optimize identity
-            calculation for JSON payloads by avoiding a parse/serialize cycle.
-            When omitted, the helper falls back to canonicalizing the JSON
-            content stored on the protobuf.
-        default : BidiComponentDefaults, optional
-            The default state mapping for the component instance. Defaults are
-            included in the identity for unkeyed components so that changing
-            default values produces a new backend identity. When a user key is
-            provided with ``key_as_main_identity=True``, these defaults are
-            ignored by :func:`compute_and_register_element_id`.
-
-        Returns
-        -------
-        dict[str, Any]
-            A mapping of deterministic values to be forwarded into
-            ``compute_and_register_element_id``.
-
-        Raises
-        ------
-        RuntimeError
-            If an unhandled ``oneof data`` variant is encountered (guards
-            against adding new fields without updating identity computation).
-        """
-        identity: dict[str, Any] = {
-            "component_name": component_name,
-            "isolate_styles": isolate_styles,
-            "width": width,
-            "height": height,
-            "default": default,
-        }
-
-        data_field = proto.WhichOneof("data")
-        if data_field is None:
-            return identity
-
-        if data_field == "json":
-            # Canonicalize only for identity so unkeyed widgets don't churn when
-            # dict insertion order changes.
-            #
-            # Optimization: Use raw `data` if available to avoid the overhead of
-            # parsing `proto.json` back into a dict.
-            canonical_digest = None
-
-            if data is not None:
-                try:
-                    canonical = json.dumps(data, sort_keys=True)
-                    canonical_digest = calc_hash(canonical)
-                except (TypeError, ValueError):
-                    # Fallback to existing logic if direct dump fails
-                    pass
-
-            if canonical_digest is None:
-                canonical_digest = self._canonical_json_digest_for_identity(proto.json)
-
-            identity["json"] = canonical_digest
-        elif data_field == "arrow_data":
-            # Hash large payloads instead of shoving raw bytes through the ID
-            # hasher for performance.
-            identity["arrow_data"] = calc_hash(proto.arrow_data.data)
-        elif data_field == "bytes":
-            # Same story for arbitrary bytes payloads: content-address the data
-            # so identity changes track real mutations without re-hashing the
-            # whole blob every run.
-            identity["bytes"] = calc_hash(proto.bytes)
-        elif data_field == "mixed":
-            mixed: MixedDataProto = proto.mixed
-            # Add the JSON content of the MixedData to the identity.
-            identity["mixed_json"] = self._canonical_json_digest_for_identity(
-                mixed.json
-            )
-            # Add the sorted content-addressed ref IDs of the Arrow blobs to the identity.
-            # Unlike other data types where we include actual bytes, here we only include
-            # the blob keys. This is sufficient because keys are content hashes of the blob
-            # content (content-addressed), so identical content produces identical keys.
-            identity["mixed_arrow_blobs"] = ",".join(sorted(mixed.arrow_blobs.keys()))
+    def status(score):
+        if score >= 75:
+            return "🟢 Healthy"
+        elif score >= 55:
+            return "🟠 Watch"
         else:
-            raise RuntimeError(
-                f"Unhandled BidiComponent.data oneof field: {data_field}"
-            )
+            return "🔴 At Risk"
 
-        return identity
+    result["status"] = result["reputation_score"].apply(status)
 
-    @gather_metrics("_bidi_component")
-    def _bidi_component(
-        self,
-        component_name: str,
-        key: BidiComponentKey = None,
-        isolate_styles: ComponentIsolateStyles = True,
-        data: BidiComponentData = None,
-        default: BidiComponentDefaults = None,
-        width: Width = "stretch",
-        height: Height = "content",
-        **kwargs: WidgetCallback | None,
-    ) -> ComponentResult:
-        """Add a bidirectional component instance to the app.
+    # Platform (source) mix per branch -> pivoted into one column per source,
+    # e.g. "Google", "Zomato", "TripAdvisor" review counts.
+    source_pivot = (
+        df.pivot_table(
+            index=group_cols,
+            columns=SOURCE_COLUMN,
+            values=RATING_COLUMN,
+            aggfunc="count",
+            fill_value=0,
+        )
+        .reset_index()
+    )
+    result = result.merge(source_pivot, on=group_cols, how="left")
 
-        This method uses a component that has already been registered with the
-        application.
+    return result.sort_values("reputation_score", ascending=True).reset_index(drop=True)
 
-        Parameters
-        ----------
-        component_name
-            The name of the registered component to use. The component's HTML,
-            CSS, and JavaScript will be loaded from the registry.
-        key
-            An optional string to use as the unique key for the component.
-            If this is omitted, a key will be generated based on the
-            component's execution sequence.
-        isolate_styles
-            Whether to isolate the component's styles in a shadow root.
-            Defaults to True.
-        data
-            Data to pass to the component. This can be any JSON-serializable
-            data, or a pandas DataFrame, NumPy array, or other dataframe-like
-            object that can be serialized to Arrow.
-        default
-            A dictionary of default values for the component's state properties.
-            These defaults are applied only when the state key doesn't exist
-            in session state. Keys must correspond to valid state names (those
-            with `on_*_change` callbacks). Trigger values do not support
-            defaults.
-        width
-            The desired width of the component. This can be one of "stretch",
-            "content", or a number of pixels.
-        height
-            The desired height of the component. This can be one of "stretch",
-            "content", or a number of pixels.
-        **kwargs
-            Keyword arguments to pass to the component. Callbacks can be passed
-            here, with the naming convention `on_{event_name}_change`.
 
-        Returns
-        -------
-        ComponentResult
-            A dictionary-like object that holds the component's state and
-            trigger values.
+def restaurant_rollup(risk_df: pd.DataFrame) -> pd.DataFrame:
+    """Chain-level summary: weighted-average score per restaurant."""
+    agg = risk_df.groupby(RESTAURANT_COLUMN).apply(
+        lambda g: pd.Series({
+            "branch_count": g[BRANCH_COLUMN].nunique(),
+            "review_count": g["review_count"].sum(),
+            "avg_reputation_score": np.average(g["reputation_score"], weights=g["review_count"]),
+            "avg_rating": np.average(g["avg_rating"], weights=g["review_count"]),
+        })
+    ).reset_index()
+    return agg.sort_values("avg_reputation_score", ascending=True).reset_index(drop=True)
 
-        Raises
-        ------
-        ValueError
-            If the component name is not found in the registry.
-        StreamlitAPIException
-            If the component does not have the required JavaScript or HTML
-            content, or if the provided data cannot be serialized.
 
-        """
-        check_cache_replay_rules()
+# ---------------------------------------------------------------------
+# TAB 2 — Early-warning spike detection (restaurant + branch + issue)
+# ---------------------------------------------------------------------
+def detect_spikes(df: pd.DataFrame) -> pd.DataFrame:
+    group_cols = [RESTAURANT_COLUMN, BRANCH_COLUMN, ISSUE_CATEGORY_COLUMN]
+    weekly = df.groupby(group_cols + ["week"]).size().reset_index(name="count")
 
-        key = to_key(key)
-        ctx = get_script_run_ctx()
+    weeks_sorted = sorted(weekly["week"].unique())
+    if len(weeks_sorted) < 2:
+        return pd.DataFrame()  # not enough history yet
 
-        if ctx is None:
-            # Create an empty state with the default value and return it
-            return ComponentResult({}, {})
+    this_week, last_week = weeks_sorted[-1], weeks_sorted[-2]
 
-        # Get the component definition from the registry
-        from streamlit.runtime import Runtime
+    this_wk = weekly[weekly["week"] == this_week].set_index(group_cols)["count"]
+    last_wk = weekly[weekly["week"] == last_week].set_index(group_cols)["count"]
 
-        registry = Runtime.instance().bidi_component_registry
-        component_def = registry.get(component_name)
+    combined = pd.DataFrame({"this_week": this_wk, "last_week": last_wk}).fillna(0)
+    combined = combined[combined["this_week"] >= MIN_WEEKLY_COUNT_FOR_ALERT]
+    combined["pct_change"] = np.where(
+        combined["last_week"] > 0,
+        100 * (combined["this_week"] - combined["last_week"]) / combined["last_week"],
+        100.0,  # brand-new issue this week with no prior history = treat as 100% spike
+    )
 
-        if component_def is None:
-            raise ValueError(f"Component '{component_name}' is not registered")
+    alerts = combined[combined["pct_change"] >= SPIKE_THRESHOLD_PCT].reset_index()
+    alerts = alerts.sort_values("pct_change", ascending=False)
+    alerts["alert_id"] = (
+        alerts[RESTAURANT_COLUMN].astype(str) + " | "
+        + alerts[BRANCH_COLUMN].astype(str) + " | "
+        + alerts[ISSUE_CATEGORY_COLUMN].astype(str)
+    )
+    alerts.attrs["this_week"] = this_week
+    return alerts
 
-        # ------------------------------------------------------------------
-        # 1. Parse user-supplied callbacks
-        # ------------------------------------------------------------------
-        # Event-specific callbacks follow the pattern ``on_<event>_change``.
-        # We deliberately *do not* support the legacy generic ``on_change``
-        # or ``on_<event>`` forms.
-        callbacks_by_event: dict[str, WidgetCallback] = {}
-        for kwarg_key, kwarg_value in list(kwargs.items()):
-            if not callable(kwarg_value):
-                continue
 
-            if kwarg_key.startswith("on_") and kwarg_key.endswith("_change"):
-                # Preferred pattern: on_<event>_change
-                event_name = kwarg_key[3:-7]  # strip prefix + suffix
-            else:
-                # Not an event callback we recognize - skip.
-                continue
+def severity_for(pct_change: float, this_week_count: int) -> str:
+    if pct_change >= 150 or this_week_count >= 15:
+        return "High"
+    elif pct_change >= 100 or this_week_count >= 8:
+        return "Medium"
+    return "Low"
 
-            if not event_name or event_name == "_":
-                raise BidiComponentInvalidCallbackNameError(kwarg_key)
 
-            callbacks_by_event[event_name] = kwarg_value
+def source_mix_for_alert(df: pd.DataFrame, restaurant: str, branch: str, issue: str, week) -> pd.DataFrame:
+    """Which platform is driving this week's spike for a given alert."""
+    subset = df[
+        (df[RESTAURANT_COLUMN] == restaurant)
+        & (df[BRANCH_COLUMN] == branch)
+        & (df[ISSUE_CATEGORY_COLUMN] == issue)
+        & (df["week"] == week)
+    ]
+    if subset.empty:
+        return pd.DataFrame()
+    return (
+        subset.groupby(SOURCE_COLUMN).size().reset_index(name="complaints_this_week")
+        .sort_values("complaints_this_week", ascending=False)
+    )
 
-        # ------------------------------------------------------------------
-        # 2. Validate default keys against registered callbacks
-        # ------------------------------------------------------------------
-        if default is not None:
-            for state_key in default:
-                if state_key not in callbacks_by_event:
-                    raise BidiComponentInvalidDefaultKeyError(
-                        state_key, list(callbacks_by_event.keys())
-                    )
 
-        # Set up the component proto
-        bidi_component_proto = BidiComponentProto()
-        bidi_component_proto.component_name = component_name
-        bidi_component_proto.isolate_styles = isolate_styles
-        bidi_component_proto.js_content = component_def.js_content or ""
-        bidi_component_proto.js_source_path = component_def.js_url or ""
-        bidi_component_proto.html_content = component_def.html_content or ""
-        bidi_component_proto.css_content = component_def.css_content or ""
-        bidi_component_proto.css_source_path = component_def.css_url or ""
+# ---------------------------------------------------------------------
+# TAB 3 — Resolution tracker (persisted to CSV) + before/after check
+# ---------------------------------------------------------------------
+TRACKER_COLUMNS = [
+    "alert_id", "restaurant", "branch", "issue", "status",
+    "assigned_to", "action_taken", "action_date", "notes",
+]
 
-        validate_width(width, allow_content=True)
-        layout_config = LayoutConfig(width=width, height=height)
 
-        if data is not None:
-            try:
-                # 1. Raw byte payloads - forward as-is.
-                if isinstance(data, (bytes, bytearray)):
-                    bidi_component_proto.bytes = bytes(data)
+def load_tracker() -> pd.DataFrame:
+    if os.path.exists(TRACKER_PATH):
+        tracker = pd.read_csv(TRACKER_PATH)
+        for col in TRACKER_COLUMNS:
+            if col not in tracker.columns:
+                tracker[col] = ""
+        return tracker[TRACKER_COLUMNS]
+    return pd.DataFrame(columns=TRACKER_COLUMNS)
 
-                # 2. Mapping-like structures (e.g. plain dict) - check for mixed data.
-                elif isinstance(data, (Mapping, list, tuple)):
-                    serialize_mixed_data(data, bidi_component_proto)
 
-                # 3. Dataframe-like structures - attempt Arrow serialization.
-                else:
-                    data_format = determine_data_format(data)
+def save_tracker(tracker_df: pd.DataFrame):
+    tracker_df.to_csv(TRACKER_PATH, index=False)
 
-                    if data_format != DataFormat.UNKNOWN:
-                        arrow_bytes = convert_anything_to_arrow_bytes(data)
 
-                        arrow_data_proto = ArrowDataProto()
-                        arrow_data_proto.data = arrow_bytes
+def before_after_effectiveness(df: pd.DataFrame, restaurant: str, branch: str, issue: str, action_date) -> dict:
+    """Compares complaint volume for RESOLUTION_WINDOW_DAYS before vs after
+    the logged action date (Module 6 roadmap Step 5)."""
+    if pd.isna(action_date):
+        return {}
+    action_date = pd.to_datetime(action_date)
+    before_start = action_date - timedelta(days=RESOLUTION_WINDOW_DAYS)
+    after_end = action_date + timedelta(days=RESOLUTION_WINDOW_DAYS)
+    today = df[DATE_COLUMN].max()
 
-                        bidi_component_proto.arrow_data.CopyFrom(arrow_data_proto)
+    subset = df[
+        (df[RESTAURANT_COLUMN] == restaurant)
+        & (df[BRANCH_COLUMN] == branch)
+        & (df[ISSUE_CATEGORY_COLUMN] == issue)
+    ]
+    before_count = subset[(subset[DATE_COLUMN] >= before_start) & (subset[DATE_COLUMN] < action_date)].shape[0]
+
+    days_elapsed = (today - action_date).days
+    after_window_end = min(after_end, today)
+    after_count = subset[(subset[DATE_COLUMN] >= action_date) & (subset[DATE_COLUMN] <= after_window_end)].shape[0]
+
+    if days_elapsed < RESOLUTION_WINDOW_DAYS:
+        verdict = f"Still Emerging — monitoring window open ({days_elapsed}/{RESOLUTION_WINDOW_DAYS} days elapsed)"
+    elif after_count < before_count:
+        verdict = "Resolved — complaint volume dropped"
+    elif after_count > before_count:
+        verdict = "Escalate — complaint volume rose after action"
+    else:
+        verdict = "Still Emerging — no material change"
+
+    return {
+        "before_count": before_count,
+        "after_count": after_count,
+        "days_elapsed": days_elapsed,
+        "verdict": verdict,
+    }
+
+
+# ---------------------------------------------------------------------
+# TAB 4 — Response draft generator (tone + platform aware)
+# ---------------------------------------------------------------------
+def draft_response_template(issue: str, branch: str, restaurant: str, source: str, tone: str) -> str:
+    issue_lower = issue.lower()
+
+    openers = {
+        "Warm & Personal": f"Dear Guest,\n\nThank you for taking the time to share your experience at our {branch} ({restaurant}) outlet.",
+        "Formal & Professional": f"Dear Valued Customer,\n\nWe appreciate you bringing your recent visit to {branch} ({restaurant}) to our attention.",
+        "Apologetic & Direct": f"Hi, thank you for the honest feedback about {branch} ({restaurant}) — we're sorry we let you down here.",
+    }
+    body = (
+        f" We're sorry to hear about the experience related to {issue_lower} — this isn't "
+        f"the standard we hold ourselves to. We've shared this directly with the outlet "
+        f"team and are taking corrective steps to address it."
+    )
+    platform_note = {
+        "Google": " We'd welcome the chance to make it right on your next visit.",
+        "Zomato": " Do reach out to us on our Zomato page or in person next time so we can fix this on the spot! 🙏",
+        "TripAdvisor": " We take detailed feedback like yours seriously and will use it to improve the guest experience going forward.",
+    }.get(source, " We'd appreciate the chance to make it right on your next visit.")
+
+    closer = "\n\nWarm regards,\nCustomer Experience Team"
+    return openers.get(tone, openers["Warm & Personal"]) + body + platform_note + closer
+
+
+def draft_response_groq(issue: str, branch: str, restaurant: str, source: str, tone: str, sample_review: str) -> str:
+    from groq import Groq
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    prompt = (
+        f"Write a short, {tone.lower()} manager response (under 80 words) to this "
+        f"restaurant review posted on {source} for the '{branch}' branch of "
+        f"'{restaurant}', which relates to the issue '{issue}'. "
+        f"Review: \"{sample_review}\". Do not invent specific compensation offers."
+    )
+    resp = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return resp.choices[0].message.content
+
+
+# ============================== APP UI ==============================
+
+st.set_page_config(page_title="Module 6 — Reputation Early-Warning System", layout="wide")
+st.title("🚨 Module 6 — Reputation Early-Warning & Resolution System")
+st.caption("Reuses your existing HDBSCAN + LLM issue categories for real-time reputation monitoring.")
+
+try:
+    df_full = load_data(DATA_PATH)
+except Exception as e:
+    st.error(f"Could not load data: {e}")
+    st.stop()
+
+# ---------------- Sidebar filters (apply across all tabs) ----------------
+st.sidebar.header("Filters")
+restaurant_options = sorted(df_full[RESTAURANT_COLUMN].dropna().unique())
+source_options = sorted(df_full[SOURCE_COLUMN].dropna().unique())
+
+restaurant_filter = st.sidebar.multiselect("Restaurant chain(s)", restaurant_options, default=restaurant_options)
+source_filter = st.sidebar.multiselect("Source / platform(s)", source_options, default=source_options)
+
+min_date, max_date = df_full[DATE_COLUMN].min().date(), df_full[DATE_COLUMN].max().date()
+date_range = st.sidebar.date_input("Review date range", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+
+df = df_full[
+    df_full[RESTAURANT_COLUMN].isin(restaurant_filter)
+    & df_full[SOURCE_COLUMN].isin(source_filter)
+]
+if isinstance(date_range, tuple) and len(date_range) == 2:
+    start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+    df = df[(df[DATE_COLUMN] >= start) & (df[DATE_COLUMN] <= end)]
+
+if df.empty:
+    st.warning("No reviews match the current filters. Widen the filters in the sidebar.")
+    st.stop()
+
+# ---------------- Top-line KPI row ----------------
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Total reviews", f"{DISPLAY_REVIEW_COUNT:,}")
+k2.metric("Branches", df[BRANCH_COLUMN].nunique())
+k3.metric("Restaurants", df[RESTAURANT_COLUMN].nunique())
+k4.metric("Sources", df[SOURCE_COLUMN].nunique())
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📝 New Review Intake", "🏢 Reputation Risk Score", "📈 Early-Warning Alerts", "🛠️ Resolution Workflow", "✍️ Response Draft"]
+)
+
+# ---------------- NEW REVIEW INTAKE ----------------
+with tab1:
+    st.subheader("New Review Intake")
+    st.write("Submit a review to run sentiment, issue, severity, branch, and reputation-risk analysis.")
+    with st.form("new_review_form", clear_on_submit=True):
+        form_col1, form_col2 = st.columns(2)
+        intake_restaurant = form_col1.selectbox("Restaurant", restaurant_options)
+        intake_branch_options = sorted(
+            df_full[df_full[RESTAURANT_COLUMN] == intake_restaurant][BRANCH_COLUMN].dropna().unique()
+        )
+        intake_branch = form_col1.selectbox("Branch", intake_branch_options or ["Unknown Branch"])
+        intake_source = form_col2.selectbox("Source", ["Google", "Zomato", "TripAdvisor"])
+        intake_rating = form_col2.slider("Rating", min_value=1, max_value=5, value=3)
+        intake_text = st.text_area("Review", placeholder="Describe the customer's experience...")
+        submitted = st.form_submit_button("Analyze and add review")
+
+    if submitted:
+        if not intake_text.strip():
+            st.error("Enter a review before submitting.")
+        else:
+            analysis = analyze_new_review(intake_text, intake_rating)
+            new_row = pd.DataFrame([{
+                RESTAURANT_COLUMN: intake_restaurant,
+                BRANCH_COLUMN: intake_branch,
+                SOURCE_COLUMN: intake_source,
+                RATING_COLUMN: intake_rating,
+                TEXT_COLUMN: intake_text.strip(),
+                "review": intake_text.strip(),
+                ISSUE_CATEGORY_COLUMN: analysis["issue"],
+                "sentiment": analysis["sentiment"],
+                "severity": analysis["severity"],
+                DATE_COLUMN: pd.Timestamp.today().normalize(),
+            }])
+            existing_new = load_new_reviews()
+            pd.concat([existing_new, new_row], ignore_index=True).to_csv(NEW_REVIEWS_PATH, index=False)
+            load_data.clear()
+            st.success("Review analyzed and added to the dashboard.")
+            result_col1, result_col2, result_col3 = st.columns(3)
+            result_col1.metric("Sentiment", analysis["sentiment"])
+            result_col2.metric("Issue", analysis["issue"])
+            result_col3.metric("Severity", analysis["severity"])
+            st.info(f"Branch identified: {intake_branch}. Similar complaints will be checked in the alerts and risk dashboard.")
+            st.rerun()
+
+# ---------------- REPUTATION SCORE ----------------
+with tab2:
+    st.subheader("Branch Reputation Risk Score")
+    st.write("Higher score = healthier reputation. Charts are shown restaurant-wise → branch-wise.")
+
+    risk_df = compute_reputation_risk(df)
+    st.markdown("**Reputation score by branch**")
+    view_choice = st.selectbox(
+        "View",
+        ["All restaurants (small multiples)"] + restaurant_options,
+        key="risk_view_choice",
+    )
+
+    if view_choice == "All restaurants (small multiples)":
+        n_restaurants = risk_df[RESTAURANT_COLUMN].nunique()
+        wrap = 3 if n_restaurants > 3 else n_restaurants
+        fig = px.bar(
+            risk_df.sort_values([RESTAURANT_COLUMN, "reputation_score"]),
+            x=BRANCH_COLUMN,
+            y="reputation_score",
+            color="reputation_score",
+            color_continuous_scale="RdYlGn",
+            range_color=[0, 100],
+            facet_col=RESTAURANT_COLUMN,
+            facet_col_wrap=wrap,
+            height=350 * (-(-n_restaurants // wrap)),  # ceil division for row count
+            title="Reputation Score by Branch, grouped by Restaurant Chain",
+        )
+        fig.update_xaxes(matches=None, tickangle=45)
+        fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        chain_df = risk_df[risk_df[RESTAURANT_COLUMN] == view_choice].sort_values("reputation_score")
+        fig = px.bar(
+            chain_df,
+            x=BRANCH_COLUMN,
+            y="reputation_score",
+            color="reputation_score",
+            color_continuous_scale="RdYlGn",
+            range_color=[0, 100],
+            title=f"Reputation Score by Branch — {view_choice}",
+        )
+        fig.update_xaxes(tickangle=45)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("**Detailed table** (Restaurant and Source included)")
+
+    display_cols = [RESTAURANT_COLUMN, BRANCH_COLUMN, "status", "reputation_score", "avg_rating",
+                     "positive_rate", "negative_issue_rate", "rating_trend_30d", "review_count"]
+    source_cols = [c for c in source_options if c in risk_df.columns]
+    display_cols += source_cols
+
+    st.dataframe(
+        risk_df[display_cols]
+        .round(2)
+        .rename(columns={RESTAURANT_COLUMN: "Restaurant", BRANCH_COLUMN: "Branch"}),
+        use_container_width=True,
+    )
+    st.caption(
+        "Source columns show how many of that branch's reviews came from each platform "
+        "(Google / Zomato / TripAdvisor), so a low score can be traced back to a specific channel."
+    )
+
+# ---------------- EARLY-WARNING ALERTS ----------------
+with tab3:
+    st.subheader("Early-Warning Alerts (Week-over-Week Spikes)")
+    alerts = detect_spikes(df)
+
+    if alerts.empty:
+        st.success("No emerging risks detected this week (or insufficient week-over-week history yet).")
+    else:
+        alert_restaurants = ["All"] + sorted(alerts[RESTAURANT_COLUMN].unique())
+        alert_restaurant_filter = st.selectbox("Filter by restaurant", alert_restaurants, key="alert_restaurant_filter")
+        view_alerts = alerts if alert_restaurant_filter == "All" else alerts[alerts[RESTAURANT_COLUMN] == alert_restaurant_filter]
+
+        this_week = alerts.attrs.get("this_week")
+
+        for _, row in view_alerts.iterrows():
+            sev = severity_for(row["pct_change"], row["this_week"])
+            color = {"High": "🔴", "Medium": "🟠", "Low": "🟡"}[sev]
+            with st.container(border=True):
+                st.markdown(f"### {color} REPUTATION ALERT — {sev} severity")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Restaurant", row[RESTAURANT_COLUMN])
+                c2.metric("Branch", row[BRANCH_COLUMN])
+                c3.metric("Issue", row[ISSUE_CATEGORY_COLUMN])
+                c4.metric("Trend", f"↑ {row['pct_change']:.0f}%")
+                st.write(
+                    f"This week: **{int(row['this_week'])}** complaints  |  "
+                    f"Last week: **{int(row['last_week'])}** complaints"
+                )
+                with st.expander("Which platform is driving this spike?"):
+                    mix = source_mix_for_alert(df, row[RESTAURANT_COLUMN], row[BRANCH_COLUMN],
+                                                row[ISSUE_CATEGORY_COLUMN], this_week)
+                    if mix.empty:
+                        st.write("No breakdown available.")
                     else:
-                        # Fallback to JSON.
-                        bidi_component_proto.json = json.dumps(data)
-            except Exception:
-                # As a last resort attempt JSON serialization so that we don't
-                # silently drop developer data.
-                try:
-                    bidi_component_proto.json = json.dumps(data)
-                except Exception:
-                    raise BidiComponentUnserializableDataError()
-        bidi_component_proto.form_id = current_form_id(self.dg)
+                        st.dataframe(mix.rename(columns={SOURCE_COLUMN: "Source"}), use_container_width=True)
 
-        # Build identity kwargs for the component instance now that the proto is
-        # populated.
-        identity_kwargs = self._build_bidi_identity_kwargs(
-            component_name=component_name,
-            isolate_styles=isolate_styles,
-            width=width,
-            height=height,
-            proto=bidi_component_proto,
-            data=data,
-            default=default,
+    st.caption(
+        f"Alert threshold: ≥{SPIKE_THRESHOLD_PCT}% week-over-week increase, "
+        f"minimum {MIN_WEEKLY_COUNT_FOR_ALERT} complaints this week."
+    )
+
+# ---------------- RESOLUTION WORKFLOW ----------------
+with tab4:
+    st.subheader("Complaint-to-Resolution Workflow")
+
+    tracker = load_tracker()
+    alerts = detect_spikes(df)
+
+    if alerts.empty:
+        st.info("No active alerts to track right now.")
+    else:
+        for _, row in alerts.iterrows():
+            alert_id = row["alert_id"]
+            existing = tracker[tracker["alert_id"] == alert_id]
+            current_status = existing["status"].iloc[0] if len(existing) else "New"
+            current_owner = existing["assigned_to"].iloc[0] if len(existing) and pd.notna(existing["assigned_to"].iloc[0]) else ""
+            current_action = existing["action_taken"].iloc[0] if len(existing) and pd.notna(existing["action_taken"].iloc[0]) else ""
+            current_action_date = existing["action_date"].iloc[0] if len(existing) and pd.notna(existing["action_date"].iloc[0]) else None
+            current_notes = existing["notes"].iloc[0] if len(existing) and pd.notna(existing["notes"].iloc[0]) else ""
+
+            with st.container(border=True):
+                st.markdown(f"**{row[RESTAURANT_COLUMN]} — {row[BRANCH_COLUMN]} — {row[ISSUE_CATEGORY_COLUMN]}**")
+
+                c1, c2 = st.columns(2)
+                new_status = c1.selectbox(
+                    "Status", STATUS_OPTIONS,
+                    index=STATUS_OPTIONS.index(current_status) if current_status in STATUS_OPTIONS else 0,
+                    key=f"status_{alert_id}",
+                )
+                assigned_to = c2.text_input("Assigned to", value=current_owner, key=f"owner_{alert_id}")
+
+                action_taken = st.text_input("Corrective action taken", value=current_action, key=f"action_{alert_id}")
+                action_date = st.date_input(
+                    "Action date",
+                    value=pd.to_datetime(current_action_date).date() if current_action_date else None,
+                    key=f"actiondate_{alert_id}",
+                )
+                notes = st.text_input("Notes", value=current_notes, key=f"notes_{alert_id}")
+
+                if action_date:
+                    result = before_after_effectiveness(
+                        df, row[RESTAURANT_COLUMN], row[BRANCH_COLUMN], row[ISSUE_CATEGORY_COLUMN], action_date
+                    )
+                    if result:
+                        b1, b2, b3 = st.columns(3)
+                        b1.metric(f"Complaints, {RESOLUTION_WINDOW_DAYS}d before", result["before_count"])
+                        b2.metric(f"Complaints, {RESOLUTION_WINDOW_DAYS}d after", result["after_count"])
+                        b3.metric("Verdict", result["verdict"])
+
+                if st.button("Save", key=f"save_{alert_id}"):
+                    tracker = tracker[tracker["alert_id"] != alert_id]
+                    tracker = pd.concat([tracker, pd.DataFrame([{
+                        "alert_id": alert_id,
+                        "restaurant": row[RESTAURANT_COLUMN],
+                        "branch": row[BRANCH_COLUMN],
+                        "issue": row[ISSUE_CATEGORY_COLUMN],
+                        "status": new_status,
+                        "assigned_to": assigned_to,
+                        "action_taken": action_taken,
+                        "action_date": action_date,
+                        "notes": notes,
+                    }])], ignore_index=True)
+                    save_tracker(tracker)
+                    st.success("Saved.")
+
+    if len(tracker):
+        st.markdown("---")
+        st.write("**Tracked alerts (persisted to `resolution_tracker.csv`):**")
+        st.dataframe(tracker, use_container_width=True)
+
+        status_counts = tracker["status"].value_counts().reset_index()
+        status_counts.columns = ["status", "count"]
+        fig_status = px.bar(status_counts, x="status", y="count", title="Alerts by Status")
+        st.plotly_chart(fig_status, use_container_width=True)
+
+# ---------------- RESPONSE DRAFT ----------------
+with tab5:
+    st.subheader("Response Draft Generator")
+
+    c1, c2, c3 = st.columns(3)
+    restaurant_choice = c1.selectbox("Restaurant", sorted(df[RESTAURANT_COLUMN].unique()), key="draft_restaurant")
+    branch_options = sorted(df[df[RESTAURANT_COLUMN] == restaurant_choice][BRANCH_COLUMN].unique())
+    branch_choice = c2.selectbox("Branch", branch_options, key="draft_branch")
+    issue_options = sorted(
+        df[(df[RESTAURANT_COLUMN] == restaurant_choice) & (df[BRANCH_COLUMN] == branch_choice)]
+        [ISSUE_CATEGORY_COLUMN].dropna().unique()
+    )
+    issue_choice = c3.selectbox("Issue category", issue_options, key="draft_issue")
+
+    c4, c5 = st.columns(2)
+    source_choice = c4.selectbox("Platform / source", sorted(df[SOURCE_COLUMN].unique()), key="draft_source")
+    tone_choice = c5.selectbox("Tone", ["Warm & Personal", "Formal & Professional", "Apologetic & Direct"], key="draft_tone")
+
+    subset = df[
+        (df[RESTAURANT_COLUMN] == restaurant_choice)
+        & (df[BRANCH_COLUMN] == branch_choice)
+        & (df[ISSUE_CATEGORY_COLUMN] == issue_choice)
+        & (df[SOURCE_COLUMN] == source_choice)
+    ]
+    if subset.empty:
+        subset = df[
+            (df[RESTAURANT_COLUMN] == restaurant_choice)
+            & (df[BRANCH_COLUMN] == branch_choice)
+            & (df[ISSUE_CATEGORY_COLUMN] == issue_choice)
+        ]
+
+    sample_review = ""
+    if len(subset) and TEXT_COLUMN in df.columns:
+        review_idx = st.selectbox(
+            "Pick a specific review to respond to",
+            list(range(len(subset))),
+            format_func=lambda i: str(subset[TEXT_COLUMN].iloc[i])[:80] + "...",
+            key="draft_review_idx",
         )
-        # Compute a unique ID for this component instance now that the proto is
-        # populated.
-        computed_id = compute_and_register_element_id(
-            "bidi_component",
-            user_key=key,
-            key_as_main_identity=True,
-            dg=self.dg,
-            **identity_kwargs,
-        )
-        bidi_component_proto.id = computed_id
+        sample_review = subset[TEXT_COLUMN].iloc[review_idx]
+        st.write("**Selected review:**")
+        st.write(f"> {sample_review}")
 
-        # Instantiate the Serde for this component instance
-        serde = BidiComponentSerde(default=default)
+    if st.button("Generate draft response"):
+        if USE_GROQ:
+            try:
+                draft = draft_response_groq(issue_choice, branch_choice, restaurant_choice, source_choice, tone_choice, sample_review)
+                st.caption("Generated via Groq LLM.")
+            except Exception as e:
+                st.warning(f"Groq call failed ({e}); falling back to template.")
+                draft = draft_response_template(issue_choice, branch_choice, restaurant_choice, source_choice, tone_choice)
+        else:
+            draft = draft_response_template(issue_choice, branch_choice, restaurant_choice, source_choice, tone_choice)
+            st.caption("Template-based draft (set GROQ_API_KEY env var to enable LLM drafting).")
 
-        # ------------------------------------------------------------------
-        # 3. Prepare IDs and register widgets
-        # ------------------------------------------------------------------
-
-        # Compute trigger aggregator id from the base id
-        def _make_trigger_aggregator_id(base: str) -> str:
-            return _make_trigger_id(base, "events")
-
-        aggregator_id = _make_trigger_aggregator_id(computed_id)
-
-        # With generalized runtime dispatch, we can attach per-key callbacks
-        # directly to the state widget by passing the callbacks mapping.
-        # We also register a presenter to shape the user-visible session_state.
-        # Allowed state keys are the ones that have callbacks registered.
-        allowed_state_keys = (
-            set(callbacks_by_event.keys()) if callbacks_by_event else None
-        )
-        presenter = make_bidi_component_presenter(
-            aggregator_id,
-            computed_id,
-            allowed_state_keys,
-        )
-
-        component_state = register_widget(
-            bidi_component_proto.id,
-            deserializer=serde.deserialize,
-            serializer=serde.serialize,
-            ctx=ctx,
-            callbacks=callbacks_by_event or None,
-            value_type="json_value",
-            presenter=presenter,
-        )
-
-        # ------------------------------------------------------------------
-        # 4. Register a single *trigger aggregator* widget
-        # ------------------------------------------------------------------
-        trigger_vals: dict[str, Any] = {}
-
-        trig_state = register_widget(
-            aggregator_id,
-            deserializer=deserialize_trigger_list,  # always returns list or None
-            serializer=lambda v: json.dumps(v),  # send dict as JSON
-            ctx=ctx,
-            callbacks=callbacks_by_event or None,
-            value_type="json_trigger_value",
-        )
-
-        # Surface per-event trigger values derived from the aggregator payload list.
-        payloads: list[object] = trig_state.value or []
-
-        event_to_value: dict[str, Any] = {}
-        for payload in payloads:
-            if isinstance(payload, dict):
-                ev = payload.get("event")
-                if isinstance(ev, str):
-                    event_to_value[ev] = payload.get("value")
-
-        for evt_name in callbacks_by_event:
-            trigger_vals[evt_name] = event_to_value.get(evt_name)
-
-        # Note: We intentionally do not inspect SessionState for additional
-        # trigger widget IDs here because doing so can raise KeyErrors when
-        # widgets are freshly registered but their values haven't been
-        # populated yet. Only the triggers explicitly registered above are
-        # included in the result object.
-
-        # ------------------------------------------------------------------
-        # 5. Enqueue proto and assemble the result object
-        # ------------------------------------------------------------------
-        self.dg._enqueue(
-            INTERNAL_COMPONENT_NAME,
-            bidi_component_proto,
-            layout_config=layout_config,
-        )
-
-        state_vals = unwrap_component_state(component_state.value)
-
-        return ComponentResult(state_vals, trigger_vals)
-
-    @property
-    def dg(self) -> DeltaGenerator:
-        """The associated DeltaGenerator."""
-        return cast("DeltaGenerator", self)
+        st.text_area("Draft response", value=draft, height=220)
+        st.download_button("Download draft as .txt", draft, file_name=f"response_{branch_choice}_{issue_choice}.txt")
