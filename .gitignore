@@ -1,0 +1,12 @@
+# Local Python environment
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local pipeline input copies
+/data/
+/scripts/data/
+
+# Streamlit local state
+.streamlit/secrets.toml
+.streamlit/cache/
