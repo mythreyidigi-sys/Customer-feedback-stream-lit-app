@@ -167,8 +167,20 @@ def load_new_reviews() -> pd.DataFrame:
 # ======================================================================
 
 
+def file_signature(path: str) -> tuple[int, int]:
+    if not os.path.exists(path):
+        return (0, 0)
+    stat = os.stat(path)
+    return (stat.st_mtime_ns, stat.st_size)
+
+
 @st.cache_data
-def load_data(path: str) -> pd.DataFrame:
+def load_data(
+    path: str,
+    path_signature: tuple[int, int],
+    cluster_signature: tuple[int, int],
+    label_signature: tuple[int, int],
+) -> pd.DataFrame:
     if path.endswith(".xlsx"):
         df = pd.read_excel(path)
     else:
@@ -519,7 +531,12 @@ st.title("🚨 Module 6 — Reputation Early-Warning & Resolution System")
 st.caption("Reuses your existing HDBSCAN + LLM issue categories for real-time reputation monitoring.")
 
 try:
-    df_full = load_data(DATA_PATH)
+    df_full = load_data(
+        DATA_PATH,
+        file_signature(DATA_PATH),
+        file_signature(CLUSTER_PATH),
+        file_signature(LABEL_PATH),
+    )
 except Exception as e:
     st.error(f"Could not load data: {e}")
     st.stop()
