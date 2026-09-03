@@ -1,4 +1,5 @@
 """Unified Streamlit dashboard for restaurant review issue analysis."""
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import joblib
@@ -6,6 +7,14 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
+from scripts.ai_search_visibility import AISearchVisibilityTracker, AISurfaceClient
+from scripts.digital_footprint import DigitalFootprintAuditor, DiscoverySourceClient, ListingCategory
+from scripts.monitoring import MentionMonitor
+from scripts.nlp_engine import NLPEngine
+from scripts.prediction import CompetitiveBenchmark, RiskPredictor
+from scripts.response import ResponseDrafter
+from scripts.trust_ethics import BiasAuditor, BiasTestCase, TransparencyLog
 
 # NOTE: this file is expected to sit at the ROOT of the repo (Streamlit
 # Cloud's "Main file path" = "main.py"). If you instead move it into a
@@ -47,6 +56,78 @@ def load_classifier():
     return bundle["model"], bundle["vectorizer"]
 
 
+@st.cache_data
+def load_findings_showcase():
+    review_path = BASE_DIR / "Analysis" / "Google Reviews" / "a2b_reviews_tamilnadu_Google_Reviews.csv"
+    if not review_path.exists():
+        return None
+
+    reviews = pd.read_csv(review_path).dropna(subset=["review"]).head(24)
+    reference_time = datetime.utcnow()
+    monitor = MentionMonitor(nlp_engine=NLPEngine(), velocity_window_hours=24)
+    mentions = monitor.ingest_batch([
+        {
+            "id": f"a2b-review-{index + 1}",
+            "source": "google_reviews",
+            "text": review,
+            "author": None,
+            "timestamp": reference_time - timedelta(hours=(23 - index) * 0.8),
+        }
+        for index, review in enumerate(reviews["review"].astype(str))
+    ])
+    velocity = monitor.sentiment_velocity(bucket_minutes=120)
+    risk_flags = RiskPredictor().score(mentions, velocity)
+    response = ResponseDrafter().draft(mentions[0]) if mentions else None
+
+    visibility = AISearchVisibilityTracker(
+        "A2B", ["best vegetarian restaurant in Chennai", "A2B customer feedback"]
+    )
+    visibility.register_surface(AISurfaceClient(
+        "demo_ai",
+        lambda prompt: f"A2B is popular and well-reviewed for South Indian food. Prompt: {prompt}",
+    ))
+    visibility.run_checks()
+
+    footprint = DigitalFootprintAuditor("consenting demo subject", consent_confirmed=True)
+    footprint.register_source(DiscoverySourceClient(
+        "demo search index",
+        ListingCategory.SEARCH_RESULT,
+        lambda query: [{
+            "url": "https://example.test/review",
+            "snippet": f"Public review summary for {query}: restaurant feedback",
+        }],
+    ))
+    footprint.run_audit()
+
+    benchmark = CompetitiveBenchmark()
+    benchmark.add_brand_mentions("A2B", mentions)
+    bias_report = BiasAuditor(nlp_engine=NLPEngine()).audit([
+        BiasTestCase("The food was good.", "standard", "The food was tasty.", "regional")
+    ])
+    transparency = TransparencyLog()
+    transparency.record(
+        "A2B",
+        "topic_risk_score",
+        risk_flags[0].risk_score if risk_flags else 0.0,
+        "Derived from imported Google review mentions",
+        contributing_mention_ids=[mention.id for mention in mentions[:3]],
+    )
+    return {
+        "reviews": len(reviews),
+        "first_review": mentions[0].nlp if mentions else None,
+        "velocity_buckets": len(velocity),
+        "anomalies": len(monitor.detect_anomalies(bucket_minutes=120)),
+        "risk_flags": risk_flags,
+        "response": response,
+        "visibility_rate": visibility.visibility_rate(),
+        "visibility_summary": visibility.trend_summary(),
+        "footprint": footprint.takedown_dashboard(),
+        "benchmark": benchmark.compare(["food_quality", "wait_time", "hygiene"]),
+        "bias_audit": BiasAuditor.summarize(bias_report),
+        "transparency_events": len(transparency.dashboard_feed()),
+    }
+
+
 def find_column(dataframe, candidates):
     return next((column for column in candidates if column in dataframe.columns), None)
 
@@ -59,7 +140,7 @@ servqual_scores = load_csv("servqual_dimension_scores.csv")
 servqual_triangulation = load_csv("servqual_nlp_triangulation.csv")
 classifier, vectorizer = load_classifier()
 
-classify_tab, reviews_tab, anomaly_tab, priority_tab, clusters_tab, servqual_tab, template_tab, about_tab = st.tabs(
+classify_tab, reviews_tab, anomaly_tab, priority_tab, clusters_tab, servqual_tab, template_tab, findings_tab, about_tab = st.tabs(
     [
         "Issue Classification",
         "Existing Reviews",
@@ -68,6 +149,7 @@ classify_tab, reviews_tab, anomaly_tab, priority_tab, clusters_tab, servqual_tab
         "Cluster Analysis",
         "SERVQUAL Survey",
         "Survey Template",
+        "Findings Showcase",
         "About This Project",
     ]
 )
@@ -414,6 +496,52 @@ with template_tab:
                 hide_index=True,
                 use_container_width=True,
             )
+
+with findings_tab:
+    st.header("Cross-Module Findings Showcase")
+    st.caption("Live demonstration using 24 existing A2B Google Reviews and local, consent-safe demo clients.")
+    findings = load_findings_showcase()
+    if findings is None:
+        st.warning("The A2B Google Reviews file is not available.")
+    else:
+        first_review = findings["first_review"]
+        risk_flags = findings["risk_flags"]
+        metric_one, metric_two, metric_three, metric_four = st.columns(4)
+        metric_one.metric("Reviews analyzed", findings["reviews"])
+        metric_two.metric("Food-quality risk", risk_flags[0].risk_score if risk_flags else "N/A")
+        metric_three.metric("AI visibility", f"{findings['visibility_rate']:.0%}")
+        metric_four.metric("Bias review flags", findings["bias_audit"][0]["flagged_pairs"])
+
+        st.subheader("What the review stream found")
+        finding_rows = [{
+            "Finding": "NLP sentiment",
+            "Result": f"First review: {first_review.polarity_label} ({first_review.polarity_score:.3f}), emotion: {first_review.dominant_emotion}",
+            "Evidence": "VADER polarity plus emotion tagging",
+        }, {
+            "Finding": "Monitoring",
+            "Result": f"{findings['velocity_buckets']} time buckets, {findings['anomalies']} anomalies",
+            "Evidence": "Sentiment velocity and anomaly detection",
+        }, {
+            "Finding": "Early warning",
+            "Result": risk_flags[0].rationale if risk_flags else "No threshold-crossing topic",
+            "Evidence": "Topic volume, negative share, and velocity",
+        }, {
+            "Finding": "Response workflow",
+            "Result": f"{findings['response'].tone} tone, status: {findings['response'].status.value}",
+            "Evidence": "Draft is pending human approval",
+        }]
+        st.dataframe(pd.DataFrame(finding_rows), hide_index=True, use_container_width=True)
+
+        left_column, right_column = st.columns(2)
+        with left_column:
+            st.subheader("Benchmark and visibility")
+            st.dataframe(pd.DataFrame(findings["benchmark"]), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(findings["visibility_summary"]), hide_index=True, use_container_width=True)
+        with right_column:
+            st.subheader("Governance evidence")
+            st.dataframe(pd.DataFrame(findings["bias_audit"]), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(findings["footprint"]), hide_index=True, use_container_width=True)
+            st.metric("Transparency events logged", findings["transparency_events"])
 
 with about_tab:
     st.header("About This Project")
