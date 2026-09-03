@@ -58,11 +58,14 @@ def load_classifier():
 
 @st.cache_data
 def load_findings_showcase():
-    review_path = BASE_DIR / "Analysis" / "Google Reviews" / "a2b_reviews_tamilnadu_Google_Reviews.csv"
+    review_path = BASE_DIR / "outputs" / "cleaned_reviews.xlsx"
     if not review_path.exists():
         return None
 
-    reviews = pd.read_csv(review_path).dropna(subset=["review"]).head(24)
+    reviews = pd.read_excel(review_path).dropna(subset=["review"])
+    if "restaurant" in reviews.columns:
+        a2b_reviews = reviews[reviews["restaurant"].eq("A2B")]
+        reviews = (a2b_reviews if not a2b_reviews.empty else reviews).head(24)
     reference_time = datetime.utcnow()
     monitor = MentionMonitor(nlp_engine=NLPEngine(), velocity_window_hours=24)
     mentions = monitor.ingest_batch([
