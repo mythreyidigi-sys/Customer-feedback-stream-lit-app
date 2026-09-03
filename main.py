@@ -63,9 +63,6 @@ def load_findings_showcase():
         return None
 
     reviews = pd.read_excel(review_path).dropna(subset=["review"])
-    if "restaurant" in reviews.columns:
-        a2b_reviews = reviews[reviews["restaurant"].eq("A2B")]
-        reviews = (a2b_reviews if not a2b_reviews.empty else reviews).head(24)
     reference_time = datetime.utcnow()
     monitor = MentionMonitor(nlp_engine=NLPEngine(), velocity_window_hours=24)
     mentions = monitor.ingest_batch([
@@ -502,7 +499,7 @@ with template_tab:
 
 with findings_tab:
     st.header("Cross-Module Findings Showcase")
-    st.caption("Live demonstration using 24 existing A2B Google Reviews and local, consent-safe demo clients.")
+    st.caption("Full-dataset analysis using all cleaned reviews from clean_reviews.py and local, consent-safe demo clients.")
     findings = load_findings_showcase()
     if findings is None:
         st.warning("The A2B Google Reviews file is not available.")
