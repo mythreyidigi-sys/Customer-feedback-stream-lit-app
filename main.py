@@ -71,7 +71,9 @@ def load_findings_showcase():
             "source": "google_reviews",
             "text": review,
             "author": None,
-            "timestamp": reference_time - timedelta(hours=(23 - index) * 0.8),
+            "timestamp": reference_time - timedelta(
+                hours=(len(reviews) - 1 - index) * 24 / max(len(reviews), 1)
+            ),
         }
         for index, review in enumerate(reviews["review"].astype(str))
     ])
