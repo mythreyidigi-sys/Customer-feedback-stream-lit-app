@@ -46,7 +46,8 @@ df["confidence"] = model.predict_proba(X).max(axis=1)
 # Display sample classifications
 print("\n=== Sample Classified Reviews ===")
 sample_cols = ["restaurant", "review_text", "predicted_issue_category", "confidence"]
-print(df[sample_cols].head(10).to_string())
+sample_output = df[sample_cols].head(10).to_string()
+print(sample_output.encode("ascii", "backslashreplace").decode("ascii"))
 
 # Issue category distribution
 print("\n=== Issue Category Distribution ===")
