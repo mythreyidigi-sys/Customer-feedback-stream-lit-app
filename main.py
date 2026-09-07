@@ -86,6 +86,10 @@ def find_column(dataframe, candidates):
 
 
 classified_reviews = load_excel("outputs/reviews_with_issue_classification.xlsx")
+if classified_reviews is None:
+    classified_reviews = load_excel("data/merged_reviews/all_restaurants_reviews.xlsx")
+    if classified_reviews is not None and "review" in classified_reviews.columns:
+        classified_reviews = classified_reviews.rename(columns={"review": "review_text"})
 anomaly_flags = load_csv("module6_weekly_spike_flags.csv")
 priority_spikes = load_csv("module6_priority_ranked_spikes.csv")
 cluster_labels = load_excel("outputs/issues/cluster_topics_labeled.xlsx")
@@ -141,9 +145,9 @@ with classify_tab:
                 st.warning("Enter a review before classifying it.")
 
 with reviews_tab:
-    st.header("Existing Review Classifications")
+    st.header("Existing Reviews")
     if classified_reviews is None:
-        st.warning("Classified reviews are not available.")
+        st.warning("Review data is not available.")
     else:
         issue_column = find_column(
             classified_reviews,
@@ -155,7 +159,18 @@ with reviews_tab:
             ["confidence", "prediction_confidence"],
         )
         if issue_column is None:
-            st.warning("The classified reviews file has no issue category column.")
+            st.info("Showing merged reviews. Run the classification pipeline to add issue categories.")
+            display_columns = [
+                column
+                for column in ["restaurant", "branch", "review_text", "source_file"]
+                if column in classified_reviews.columns
+            ]
+            st.metric("Reviews", len(classified_reviews))
+            st.dataframe(
+                classified_reviews[display_columns],
+                hide_index=True,
+                use_container_width=True,
+            )
         else:
             restaurant_filter, issue_filter = st.columns(2)
             restaurant_options = ["All restaurants"]

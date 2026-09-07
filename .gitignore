@@ -7,6 +7,11 @@ __pycache__/
 /data/
 /scripts/data/
 
+# Deployment input used by the dashboard fallback
+!/data/
+!/data/merged_reviews/
+!/data/merged_reviews/all_restaurants_reviews.xlsx
+
 # Streamlit local state
 .streamlit/secrets.toml
 .streamlit/cache/
