@@ -35,19 +35,35 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 import sys
 import os
+from pathlib import Path
 
 # Add the scripts directory to the path
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Import with flexible naming
-try:
-    from sample_data import load_or_generate_reviews
-except ImportError:
-    from importlib import import_module
-    sample_data_module = import_module('sample_data (1)')
-    load_or_generate_reviews = sample_data_module.load_or_generate_reviews
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_OUT = str(BASE_DIR / "scripts" / "issue_classifier.joblib")
 
-MODEL_OUT = "issue_classifier.joblib"
+
+def load_or_generate_reviews():
+    """Load the repository's existing labeled export when sample data is absent."""
+    labeled_path = BASE_DIR / "outputs" / "reviews_with_issue_classification.xlsx"
+    if not labeled_path.exists():
+        raise FileNotFoundError(
+            "No sample_data module or labeled review export was found. "
+            f"Expected {labeled_path}."
+        )
+
+    reviews = pd.read_excel(labeled_path)
+    if "review_text" not in reviews.columns and "review" in reviews.columns:
+        reviews["review_text"] = reviews["review"]
+    if "issue_category" not in reviews.columns:
+        if "predicted_issue_category" not in reviews.columns:
+            raise ValueError(
+                "The labeled review export must contain issue_category or "
+                "predicted_issue_category."
+            )
+        reviews["issue_category"] = reviews["predicted_issue_category"]
+    return reviews
 
 
 def build_features(df, embeddings_path=None):
@@ -101,6 +117,7 @@ def train(df=None, embeddings_path=None, model_out=MODEL_OUT):
 
     print(f"\nSelected model: {best_name} (macro-F1 = {best_f1:.3f})")
 
+    Path(model_out).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": best_model, "vectorizer": vectorizer,
                  "model_name": best_name, "classes": sorted(y.unique())}, model_out)
     print(f"Saved trained classifier -> {model_out}")

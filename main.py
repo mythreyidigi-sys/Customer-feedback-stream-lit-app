@@ -963,7 +963,11 @@ with pipeline_tab:
         ("5. HDBSCAN Clustering", "run_hdbscan.py", "outputs/issues/hdbscan_clustered_reviews.xlsx"),
         ("6. Representative Samples", "Cluster_representative_samples.py", "outputs/issues/cluster_representative_samples.csv"),
         ("7. Autolabel Clusters (Groq)", "Autolabelling.py", "outputs/issues/cluster_topics_labeled.xlsx"),
-        ("8. Train Issue Classifier", "01_issue_classifier.py", "scripts/issue_classifier.joblib"),
+        (
+            "8. Train Issue Classifier",
+            "01_issue_classifier (1).py",
+            "scripts/issue_classifier.joblib",
+        ),
         ("9. Apply Classifier to All Reviews", "apply_classifier.py", "outputs/reviews_with_issue_classification.xlsx"),
         (
             "10. Reputation Early-Warning App",
