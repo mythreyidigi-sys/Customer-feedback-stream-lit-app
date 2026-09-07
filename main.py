@@ -965,6 +965,11 @@ with pipeline_tab:
         ("7. Autolabel Clusters (Groq)", "Autolabelling.py", "outputs/issues/cluster_topics_labeled.xlsx"),
         ("8. Train Issue Classifier", "01_issue_classifier.py", "scripts/issue_classifier.joblib"),
         ("9. Apply Classifier to All Reviews", "apply_classifier.py", "outputs/reviews_with_issue_classification.xlsx"),
+        (
+            "10. Reputation Early-Warning App",
+            "module6_reputation_early_warning_app (2).py",
+            "scripts_new792026/module6_reputation_early_warning_app (2).py",
+        ),
     ]
 
     rows = []
