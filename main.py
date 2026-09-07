@@ -87,6 +87,8 @@ def find_column(dataframe, candidates):
 
 classified_reviews = load_excel("outputs/reviews_with_issue_classification.xlsx")
 if classified_reviews is None:
+    classified_reviews = load_excel("outputs/cleaned_reviews.xlsx")
+if classified_reviews is None:
     classified_reviews = load_excel("data/merged_reviews/all_restaurants_reviews.xlsx")
     if classified_reviews is not None and "review" in classified_reviews.columns:
         classified_reviews = classified_reviews.rename(columns={"review": "review_text"})
