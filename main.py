@@ -967,8 +967,8 @@ with pipeline_tab:
         ("9. Apply Classifier to All Reviews", "apply_classifier.py", "outputs/reviews_with_issue_classification.xlsx"),
         (
             "10. Reputation Early-Warning App",
-            "module6_reputation_early_warning_app (2).py",
-            "scripts_new792026/module6_reputation_early_warning_app (2).py",
+            "module6_reputation_early_warning_app (12) (2).py",
+            "scripts_new792026/module6_reputation_early_warning_app (12) (2).py",
         ),
     ]
 

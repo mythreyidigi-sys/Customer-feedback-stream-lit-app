@@ -64,8 +64,10 @@ and platform breakdown that this build adds — best to include them.
 """
 
 import os
+import sys
 from datetime import timedelta
 from importlib import import_module
+from importlib.util import module_from_spec, spec_from_file_location
 
 import joblib
 import numpy as np
@@ -73,14 +75,41 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-from root_cause_emotion_analysis import build_crosstab, dominant_emotion_summary
-from scripts.emotion_classification import classify_emotions
-from scripts.escalation_detection import cluster_level_alert, compute_urgency
-from scripts.empathetic_reply_generator import fallback_reply
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def load_local_module(module_name, filename):
+    module_path = os.path.join(MODULE_DIR, filename)
+    spec = spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load {module_name} from {module_path}")
+    module = module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+load_local_module("cx_common", "cx_common (1).py")
+root_cause_module = load_local_module(
+    "root_cause_emotion_analysis", "root_cause_emotion_analysis (1).py"
+)
+emotion_module = load_local_module("emotion_classification", "emotion_classification (1).py")
+escalation_module = load_local_module("escalation_detection", "escalation_detection (1).py")
+reply_module = load_local_module(
+    "empathetic_reply_generator", "empathetic_reply_generator (1).py"
+)
+
+build_crosstab = root_cause_module.build_crosstab
+dominant_emotion_summary = root_cause_module.dominant_emotion_summary
+classify_emotions = emotion_module.classify_emotions
+cluster_level_alert = escalation_module.cluster_level_alert
+compute_urgency = escalation_module.compute_urgency
+fallback_reply = reply_module.fallback_reply
 
 # ============================== CONFIG ==============================
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(
     BASE_DIR,
     "outputs",
