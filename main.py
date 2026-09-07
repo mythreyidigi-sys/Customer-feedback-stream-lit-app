@@ -1,5 +1,5 @@
 """Unified Streamlit dashboard for restaurant review issue analysis."""
-from datetime import datetime, timedelta
+import os
 from pathlib import Path
 
 import joblib
@@ -8,14 +8,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from scripts.ai_search_visibility import AISearchVisibilityTracker, AISurfaceClient
-from scripts.digital_footprint import DigitalFootprintAuditor, DiscoverySourceClient, ListingCategory
-from scripts.monitoring import MentionMonitor
-from scripts.nlp_engine import NLPEngine
-from scripts.prediction import CompetitiveBenchmark, RiskPredictor
-from scripts.response import ResponseDrafter
-from scripts.trust_ethics import BiasAuditor, BiasTestCase, TransparencyLog
-
 # NOTE: this file is expected to sit at the ROOT of the repo (Streamlit
 # Cloud's "Main file path" = "main.py"). If you instead move it into a
 # subfolder, change .parent to .parent.parent to match.
@@ -23,6 +15,39 @@ BASE_DIR = Path(__file__).resolve().parent
 
 st.set_page_config(page_title="Restaurant Issue Analysis", layout="wide")
 st.title("Restaurant Review Issue Analysis")
+
+# Reputation Management add-on: sits in a "reputation_management/" folder
+# alongside main.py. Import is wrapped so the rest of the dashboard still
+# works even if that folder hasn't been uploaded yet.
+try:
+    from reputation_management import (
+        MentionMonitor, NLPEngine, RiskPredictor, CompetitiveBenchmark,
+        ResponseDrafter, AISearchVisibilityTracker, DigitalFootprintAuditor,
+        BiasAuditor, TransparencyLog,
+    )
+    from reputation_management.trust_ethics import BiasTestCase
+    from reputation_management.ai_search_visibility import AISurfaceClient
+    from reputation_management.digital_footprint import DiscoverySourceClient, ListingCategory
+
+    REPUTATION_MODULE_AVAILABLE = True
+    REPUTATION_IMPORT_ERROR = None
+except Exception as exc:  # noqa: BLE001 - surfaced to the user in-tab, not crashed
+    REPUTATION_MODULE_AVAILABLE = False
+    REPUTATION_IMPORT_ERROR = str(exc)
+
+# CX add-on scripts (emotion classification, root-cause x emotion, escalation
+# detection, empathetic replies): sit as plain .py files alongside main.py.
+try:
+    from emotion_classification import classify_emotions, EMOTION_TAXONOMY
+    from root_cause_emotion_analysis import build_crosstab, dominant_emotion_summary
+    from escalation_detection import compute_urgency, cluster_level_alert
+    from empathetic_reply_generator import generate_replies
+
+    CX_MODULES_AVAILABLE = True
+    CX_IMPORT_ERROR = None
+except Exception as exc:  # noqa: BLE001
+    CX_MODULES_AVAILABLE = False
+    CX_IMPORT_ERROR = str(exc)
 
 
 @st.cache_data
@@ -56,80 +81,6 @@ def load_classifier():
     return bundle["model"], bundle["vectorizer"]
 
 
-@st.cache_data
-def load_findings_showcase():
-    review_path = BASE_DIR / "outputs" / "cleaned_reviews.xlsx"
-    if not review_path.exists():
-        return None
-
-    reviews = pd.read_excel(review_path).dropna(subset=["review"])
-    reference_time = datetime.utcnow()
-    monitor = MentionMonitor(nlp_engine=NLPEngine(), velocity_window_hours=24)
-    mentions = monitor.ingest_batch([
-        {
-            "id": f"a2b-review-{index + 1}",
-            "source": "google_reviews",
-            "text": review,
-            "author": None,
-            "timestamp": reference_time - timedelta(
-                hours=(len(reviews) - 1 - index) * 24 / max(len(reviews), 1)
-            ),
-        }
-        for index, review in enumerate(reviews["review"].astype(str))
-    ])
-    velocity = monitor.sentiment_velocity(bucket_minutes=120)
-    risk_flags = RiskPredictor().score(mentions, velocity)
-    response = ResponseDrafter().draft(mentions[0]) if mentions else None
-
-    visibility = AISearchVisibilityTracker(
-        "A2B", ["best vegetarian restaurant in Chennai", "A2B customer feedback"]
-    )
-    visibility.register_surface(AISurfaceClient(
-        "demo_ai",
-        lambda prompt: f"A2B is popular and well-reviewed for South Indian food. Prompt: {prompt}",
-    ))
-    visibility.run_checks()
-
-    footprint = DigitalFootprintAuditor("consenting demo subject", consent_confirmed=True)
-    footprint.register_source(DiscoverySourceClient(
-        "demo search index",
-        ListingCategory.SEARCH_RESULT,
-        lambda query: [{
-            "url": "https://example.test/review",
-            "snippet": f"Public review summary for {query}: restaurant feedback",
-        }],
-    ))
-    footprint.run_audit()
-
-    benchmark = CompetitiveBenchmark()
-    benchmark.add_brand_mentions("A2B", mentions)
-    bias_report = BiasAuditor(nlp_engine=NLPEngine()).audit([
-        BiasTestCase("The food was good.", "standard", "The food was tasty.", "regional")
-    ])
-    transparency = TransparencyLog()
-    transparency.record(
-        "A2B",
-        "topic_risk_score",
-        risk_flags[0].risk_score if risk_flags else 0.0,
-        "Derived from imported Google review mentions",
-        contributing_mention_ids=[mention.id for mention in mentions[:3]],
-    )
-    return {
-        "reviews": len(reviews),
-        "first_review": mentions[0].nlp if mentions else None,
-        "velocity_buckets": len(velocity),
-        "anomalies": len(monitor.detect_anomalies(bucket_minutes=120)),
-        "risk_flags": risk_flags,
-        "response": response,
-        "visibility_rate": visibility.visibility_rate(),
-        "visibility_summary": visibility.trend_summary(),
-        "footprint": footprint.takedown_dashboard(),
-        "benchmark": benchmark.compare(["food_quality", "wait_time", "hygiene"]),
-        "bias_audit": BiasAuditor.summarize(bias_report),
-        "transparency_events": len(transparency.dashboard_feed()),
-    }
-
-
 def find_column(dataframe, candidates):
     return next((column for column in candidates if column in dataframe.columns), None)
 
@@ -142,7 +93,7 @@ servqual_scores = load_csv("servqual_dimension_scores.csv")
 servqual_triangulation = load_csv("servqual_nlp_triangulation.csv")
 classifier, vectorizer = load_classifier()
 
-classify_tab, reviews_tab, anomaly_tab, priority_tab, clusters_tab, servqual_tab, template_tab, findings_tab, about_tab = st.tabs(
+classify_tab, reviews_tab, anomaly_tab, priority_tab, clusters_tab, servqual_tab, template_tab, reputation_tab, emotion_tab, about_tab = st.tabs(
     [
         "Issue Classification",
         "Existing Reviews",
@@ -151,7 +102,8 @@ classify_tab, reviews_tab, anomaly_tab, priority_tab, clusters_tab, servqual_tab
         "Cluster Analysis",
         "SERVQUAL Survey",
         "Survey Template",
-        "Findings Showcase",
+        "Reputation Management",
+        "Emotion & Escalation",
         "About This Project",
     ]
 )
@@ -499,51 +451,480 @@ with template_tab:
                 use_container_width=True,
             )
 
-with findings_tab:
-    st.header("Cross-Module Findings Showcase")
-    st.caption("Full-dataset analysis using all cleaned reviews from clean_reviews.py and local, consent-safe demo clients.")
-    findings = load_findings_showcase()
-    if findings is None:
-        st.warning("The A2B Google Reviews file is not available.")
+with reputation_tab:
+    st.header("Reputation Management")
+
+    if not REPUTATION_MODULE_AVAILABLE:
+        st.warning(
+            "The 'reputation_management' add-on package was not found next to "
+            "main.py. Upload the 'reputation_management' folder (from the "
+            "reputation_management_addon.zip) to the repo root to enable this tab."
+        )
+        with st.expander("Import error details"):
+            st.code(REPUTATION_IMPORT_ERROR or "Unknown import error")
     else:
-        first_review = findings["first_review"]
-        risk_flags = findings["risk_flags"]
-        metric_one, metric_two, metric_three, metric_four = st.columns(4)
-        metric_one.metric("Reviews analyzed", findings["reviews"])
-        metric_two.metric("Food-quality risk", risk_flags[0].risk_score if risk_flags else "N/A")
-        metric_three.metric("AI visibility", f"{findings['visibility_rate']:.0%}")
-        metric_four.metric("Bias review flags", findings["bias_audit"][0]["flagged_pairs"])
+        st.caption(
+            "Cross-platform mention monitoring, sentiment velocity, predictive "
+            "risk flags, AI-assisted response drafting, AI-search visibility, "
+            "digital footprint auditing, and bias/transparency auditing — built "
+            "on top of the same review data used elsewhere in this dashboard."
+        )
 
-        st.subheader("What the review stream found")
-        finding_rows = [{
-            "Finding": "NLP sentiment",
-            "Result": f"First review: {first_review.polarity_label} ({first_review.polarity_score:.3f}), emotion: {first_review.dominant_emotion}",
-            "Evidence": "VADER polarity plus emotion tagging",
-        }, {
-            "Finding": "Monitoring",
-            "Result": f"{findings['velocity_buckets']} time buckets, {findings['anomalies']} anomalies",
-            "Evidence": "Sentiment velocity and anomaly detection",
-        }, {
-            "Finding": "Early warning",
-            "Result": risk_flags[0].rationale if risk_flags else "No threshold-crossing topic",
-            "Evidence": "Topic volume, negative share, and velocity",
-        }, {
-            "Finding": "Response workflow",
-            "Result": f"{findings['response'].tone} tone, status: {findings['response'].status.value}",
-            "Evidence": "Draft is pending human approval",
-        }]
-        st.dataframe(pd.DataFrame(finding_rows), hide_index=True, use_container_width=True)
+        @st.cache_data
+        def _load_mention_source_texts():
+            """Pull real review text + dates where available, else fall back
+            to a small synthetic sample so this tab still works standalone."""
+            candidates = [classified_reviews, cluster_labels]
+            for candidate in candidates:
+                if candidate is not None and len(candidate) > 0:
+                    text_col = find_column(candidate, ["review_text", "review", "Review"])
+                    date_col = find_column(candidate, ["review_date", "date", "Date"])
+                    if text_col:
+                        sample = candidate[[text_col]].dropna().head(200).copy()
+                        sample = sample.rename(columns={text_col: "text"})
+                        if date_col and date_col in candidate.columns:
+                            sample["timestamp"] = pd.to_datetime(
+                                candidate.loc[sample.index, date_col], errors="coerce"
+                            )
+                        return sample.reset_index(drop=True), False
+            sample_reviews = [
+                "The wait time was ridiculous, waited 40 minutes for a simple meal!!",
+                "Absolutely loved the food, amazing flavors and quick service.",
+                "Yeah great service... waited an hour and food was cold. Wow!!!",
+                "Staff was rude and negligent, wouldn't recommend at all.",
+                "Kitchen looked dirty and there was an unhygienic smell near the counter.",
+                "Overcharged on the bill, had to ask for a refund, very annoying.",
+                "no cap this place slaps, best value for money fr fr",
+                "Food quality was tasteless and stale, quite disappointed.",
+                "Great portions, fair price, will come again!",
+                "Rude staff again, second time this happened, unacceptable.",
+            ]
+            return pd.DataFrame({"text": sample_reviews}), True
 
-        left_column, right_column = st.columns(2)
-        with left_column:
-            st.subheader("Benchmark and visibility")
-            st.dataframe(pd.DataFrame(findings["benchmark"]), hide_index=True, use_container_width=True)
-            st.dataframe(pd.DataFrame(findings["visibility_summary"]), hide_index=True, use_container_width=True)
-        with right_column:
-            st.subheader("Governance evidence")
-            st.dataframe(pd.DataFrame(findings["bias_audit"]), hide_index=True, use_container_width=True)
-            st.dataframe(pd.DataFrame(findings["footprint"]), hide_index=True, use_container_width=True)
-            st.metric("Transparency events logged", findings["transparency_events"])
+        mention_source_df, using_demo_data = _load_mention_source_texts()
+        if using_demo_data:
+            st.info(
+                "No review text found in already-loaded data, so this tab is "
+                "running on a small built-in demo sample. It will automatically "
+                "switch to your real reviews once available."
+            )
+
+        @st.cache_resource
+        def _build_monitor(_source_df):
+            from datetime import datetime, timedelta
+            import random
+
+            from reputation_management.monitoring import SourceClient
+
+            now = datetime.utcnow()
+            has_dates = "timestamp" in _source_df.columns
+
+            def _fetch():
+                rows = []
+                for i, row in _source_df.reset_index(drop=True).iterrows():
+                    ts = row["timestamp"] if has_dates and pd.notna(row.get("timestamp")) else (
+                        now - timedelta(minutes=random.randint(0, 6000))
+                    )
+                    rows.append({
+                        "id": f"m{i}",
+                        "source": "review_feed",
+                        "text": str(row["text"]),
+                        "author": None,
+                        "timestamp": ts,
+                    })
+                return rows
+
+            monitor = MentionMonitor(velocity_window_hours=24 * 30)
+            monitor.register_source(SourceClient("review_feed", _fetch))
+            mentions = monitor.poll_all_sources()
+            return monitor, mentions
+
+        monitor, mentions = _build_monitor(mention_source_df)
+
+        (
+            monitoring_subtab, nlp_subtab, risk_subtab, response_subtab,
+            visibility_subtab, footprint_subtab, trust_subtab,
+        ) = st.tabs([
+            "Monitoring & Velocity", "NLP Analyzer", "Risk Flags",
+            "Response Drafting", "AI Search Visibility",
+            "Digital Footprint Audit", "Trust & Transparency",
+        ])
+
+        # -- Monitoring & Sentiment Velocity ---------------------------------
+        with monitoring_subtab:
+            st.subheader("Sentiment Velocity")
+            st.caption(
+                "How fast negative sentiment is accelerating, bucketed by time "
+                "window — the early-warning signal, not just current sentiment level."
+            )
+            velocity = monitor.sentiment_velocity(bucket_minutes=60 * 24 * 7)
+            if not velocity:
+                st.info("Not enough mention volume to compute sentiment velocity yet.")
+            else:
+                velocity_df = pd.DataFrame(velocity)
+                fig = px.line(
+                    velocity_df, x="bucket_start", y="negative_share",
+                    markers=True, title="Negative Share Over Time",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(velocity_df, hide_index=True, use_container_width=True)
+
+                anomalies = monitor.detect_anomalies(bucket_minutes=60 * 24 * 7)
+                st.subheader(f"Anomaly Alerts ({len(anomalies)})")
+                if anomalies:
+                    st.dataframe(pd.DataFrame(anomalies), hide_index=True, use_container_width=True)
+                else:
+                    st.success("No statistically significant sentiment spikes detected.")
+
+        # -- NLP Deep-Dive -----------------------------------------------------
+        with nlp_subtab:
+            st.subheader("Analyze a Review's Tone")
+            st.caption("Goes beyond positive/negative: sarcasm, dominant emotion, and cultural-context flags.")
+            sample_text = st.text_area(
+                "Review text", value=mention_source_df["text"].iloc[0] if len(mention_source_df) else "",
+                height=100,
+            )
+            if st.button("Analyze tone", key="analyze_tone_btn"):
+                result = NLPEngine().analyze(sample_text)
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Polarity", f"{result.polarity_label} ({result.polarity_score})")
+                c2.metric("Sarcasm flagged", "Yes" if result.sarcasm_flag else "No")
+                c3.metric("Dominant emotion", result.dominant_emotion)
+                if result.needs_human_review:
+                    st.warning("Flagged for human review (sarcasm, cultural context, or ambiguous score).")
+                st.json(result.emotions)
+
+        # -- Predictive Risk Flags ----------------------------------------------
+        with risk_subtab:
+            st.subheader("Predictive Risk Flags")
+            st.caption(
+                "Combines complaint-topic volume, negativity share, and sentiment "
+                "velocity into an early-warning risk score per topic."
+            )
+            predictor = RiskPredictor()
+            flags = predictor.score(mentions, velocity_by_bucket=monitor.sentiment_velocity(bucket_minutes=60 * 24 * 7))
+            if flags:
+                flags_df = pd.DataFrame([f.__dict__ for f in flags])
+                st.dataframe(flags_df, hide_index=True, use_container_width=True)
+            else:
+                st.success("No elevated or critical risk topics detected in the current data.")
+
+        # -- AI-Assisted Response Drafting ---------------------------------------
+        with response_subtab:
+            st.subheader("Draft a Response")
+            st.caption("Tone-matched draft reply with a mandatory human-approval step before it's considered final.")
+            if not mentions:
+                st.info("No mentions available to draft a response for.")
+            else:
+                options = {f"{m.id}: {m.text[:60]}...": m for m in mentions[:30]}
+                choice = st.selectbox("Pick a mention", list(options.keys()))
+                selected_mention = options[choice]
+
+                if "response_drafter" not in st.session_state:
+                    st.session_state.response_drafter = ResponseDrafter()
+                drafter = st.session_state.response_drafter
+
+                if st.button("Generate draft", key="draft_btn"):
+                    draft = drafter.draft(selected_mention)
+                    st.session_state[f"draft_{selected_mention.id}"] = draft
+
+                draft = st.session_state.get(f"draft_{selected_mention.id}")
+                if draft:
+                    st.text_area("Draft reply", value=draft.draft_text, height=100, key=f"draft_text_{selected_mention.id}")
+                    st.caption(f"Tone: {draft.tone} | Status: {draft.status}")
+                    col_a, col_b = st.columns(2)
+                    if col_a.button("Approve", key=f"approve_{selected_mention.id}"):
+                        drafter.approve(selected_mention.id, reviewer="dashboard_user")
+                        st.success("Approved.")
+                    if col_b.button("Reject", key=f"reject_{selected_mention.id}"):
+                        drafter.reject(selected_mention.id, reviewer="dashboard_user")
+                        st.error("Rejected.")
+
+        # -- AI Search Visibility ------------------------------------------------
+        with visibility_subtab:
+            st.subheader("AI Search Visibility")
+            st.caption("Tracks whether/how your brand appears in AI Overviews or assistant answers for key prompts.")
+            brand_name = st.text_input("Brand name", value="Our Restaurant")
+            tracked_prompt = st.text_input("Prompt to check", value="best vegetarian restaurant nearby")
+            if st.button("Run visibility check", key="visibility_btn"):
+                def _fake_ai_answer(prompt: str) -> str:
+                    return f"For vegetarian dining, {brand_name} is a popular, well-reviewed option nearby."
+
+                tracker = AISearchVisibilityTracker(brand_name, tracked_prompts=[tracked_prompt])
+                tracker.register_surface(AISurfaceClient("ai_overview", _fake_ai_answer))
+                checks = tracker.run_checks()
+                st.dataframe(pd.DataFrame([c.__dict__ for c in checks]), hide_index=True, use_container_width=True)
+                st.caption(
+                    "Uses a placeholder AI-answer function — replace `AISurfaceClient`'s "
+                    "query function with a real AI-search API call for production use."
+                )
+
+        # -- Digital Footprint Audit ----------------------------------------------
+        with footprint_subtab:
+            st.subheader("Digital Footprint Audit")
+            st.caption("Self-service audit + takedown-request workflow for personal listings (requires explicit consent).")
+            subject_name = st.text_input("Name to audit", value="")
+            consent = st.checkbox("I confirm this is my own name and I consent to this audit.")
+            if st.button("Run audit", key="footprint_btn", disabled=not (subject_name and consent)):
+                def _fake_broker_search(name: str):
+                    return [{
+                        "url": "https://databroker.example/profile/123",
+                        "snippet": f"{name} - phone: 98xxxxxxx0, address on file",
+                        "is_outdated": True,
+                    }]
+
+                auditor = DigitalFootprintAuditor(subject_name=subject_name, consent_confirmed=True)
+                auditor.register_source(
+                    DiscoverySourceClient("ExampleDataBroker", ListingCategory.DATA_BROKER, _fake_broker_search)
+                )
+                listings = auditor.run_audit()
+                st.dataframe(pd.DataFrame(auditor.takedown_dashboard()), hide_index=True, use_container_width=True)
+                if listings:
+                    auditor.request_takedown(listings[0].id)
+                    st.success(f"Takedown requested for listing {listings[0].id}.")
+                st.caption(
+                    "Uses a placeholder data-broker search — replace `DiscoverySourceClient`'s "
+                    "search function with a real data-broker/opt-out API for production use."
+                )
+
+        # -- Trust, Bias & Transparency --------------------------------------------
+        with trust_subtab:
+            st.subheader("Bias Audit")
+            st.caption("Checks whether the sentiment model scores equivalent statements differently based on dialect/register.")
+            bias_cases = [
+                BiasTestCase(
+                    group_a_text="The service was straight-up bad, not gonna lie.",
+                    group_a_label="AAVE_slang",
+                    group_b_text="The service was quite poor, to be honest.",
+                    group_b_label="standard_english",
+                ),
+                BiasTestCase(
+                    group_a_text="Food was great fr fr no cap.",
+                    group_a_label="AAVE_slang",
+                    group_b_text="The food was genuinely excellent.",
+                    group_b_label="standard_english",
+                ),
+            ]
+            bias_auditor = BiasAuditor()
+            report = bias_auditor.audit(bias_cases)
+            st.dataframe(pd.DataFrame(BiasAuditor.summarize(report)), hide_index=True, use_container_width=True)
+
+            st.subheader("Transparency Log")
+            st.caption("Audit trail of any automated score changes, with a human-readable reason and contributing evidence.")
+            if "transparency_log" not in st.session_state:
+                st.session_state.transparency_log = TransparencyLog()
+                st.session_state.transparency_log.record(
+                    entity="Overall Reputation Score", metric="reputation_score",
+                    new_value=72.5, old_value=78.0,
+                    reason="Spike in wait-time-related negative mentions (sentiment velocity accelerating)",
+                    contributing_mention_ids=[m.id for m in mentions[:3]],
+                )
+            st.dataframe(
+                pd.DataFrame(st.session_state.transparency_log.dashboard_feed()),
+                hide_index=True, use_container_width=True,
+            )
+
+
+with emotion_tab:
+    st.header("Emotion, Root-Cause & Escalation Analysis")
+
+    if not CX_MODULES_AVAILABLE:
+        st.warning(
+            "The CX add-on scripts (emotion_classification.py, "
+            "root_cause_emotion_analysis.py, escalation_detection.py, "
+            "empathetic_reply_generator.py, cx_common.py) were not found "
+            "next to main.py. Upload all five files to the repo root to "
+            "enable this tab."
+        )
+        with st.expander("Import error details"):
+            st.code(CX_IMPORT_ERROR or "Unknown import error")
+    else:
+        st.caption(
+            "Goes beyond positive/negative sentiment: classifies each review's "
+            "dominant emotion, cross-tabs emotion against issue clusters, flags "
+            "reviews needing urgent attention, and drafts empathetic manager "
+            "replies. Uses the Groq API if GROQ_API_KEY is set in secrets, "
+            "otherwise falls back to keyword/template heuristics automatically."
+        )
+
+        # Bridge Streamlit secrets -> environment variable, since cx_common.py
+        # reads GROQ_API_KEY via os.environ (works with or without secrets set).
+        try:
+            if "GROQ_API_KEY" in st.secrets and not os.environ.get("GROQ_API_KEY"):
+                os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+        except Exception:
+            pass  # no secrets.toml configured -- fine, heuristic fallback is used
+
+        cx_source_df = None
+        for candidate in (classified_reviews, cluster_labels):
+            if candidate is not None and len(candidate) > 0:
+                cx_source_df = candidate
+                break
+
+        if cx_source_df is None:
+            st.info(
+                "No review dataset loaded yet (looks for "
+                "outputs/reviews_with_issue_classification.xlsx). Using a "
+                "small built-in demo sample instead."
+            )
+            cx_source_df = pd.DataFrame({
+                "review_text": [
+                    "The wait time was ridiculous, waited 40 minutes for a simple meal!!",
+                    "Absolutely loved the food, amazing flavors and quick service.",
+                    "Portion was tiny for the price, felt cheated honestly.",
+                    "Staff was rude and negligent, wouldn't recommend at all.",
+                    "Kitchen looked dirty and there was an unhygienic smell near the counter.",
+                    "Overcharged on the bill, had to ask for a refund, very annoying.",
+                    "Used to be so much better a few years ago, quality has dropped.",
+                    "Food quality was tasteless and stale, quite disappointed.",
+                    "Great portions, fair price, will come again!",
+                    "Surprised how quickly they fixed the mix-up with our order.",
+                ],
+                "rating": [1, 5, 2, 1, 1, 2, 3, 2, 5, 4],
+            })
+
+        cx_text_col = find_column(cx_source_df, ["review_text", "review", "Review"]) or "review_text"
+        cx_rating_col = find_column(cx_source_df, ["rating", "Rating"])
+        cx_date_col = find_column(cx_source_df, ["review_date", "date", "Date"])
+        cx_chain_col = find_column(cx_source_df, ["restaurant", "chain", "Restaurant"])
+        cx_issue_col = find_column(
+            cx_source_df, ["predicted_issue_category", "issue_cluster", "issue_category"]
+        )
+
+        emo_subtab, root_cause_subtab, escalation_subtab, reply_subtab = st.tabs(
+            ["Emotion Classification", "Root Cause x Emotion", "Escalation Detection", "Empathetic Reply Drafts"]
+        )
+
+        # -- Emotion Classification -----------------------------------------------
+        with emo_subtab:
+            st.subheader("Emotion-Layer Classification")
+            st.caption(
+                "Classifies each review's dominant emotion (delight, "
+                "disappointment, frustration, betrayal, relief, nostalgia, "
+                "neutral) -- more actionable than plain positive/negative."
+            )
+            max_n = max(min(300, len(cx_source_df)), 1)
+            default_n = min(50, max_n)
+            sample_n = st.slider(
+                "Number of reviews to classify (capped for demo speed)",
+                min_value=min(5, max_n), max_value=max_n, value=default_n,
+            )
+            if st.button("Run emotion classification", key="run_emotion_btn"):
+                subset = cx_source_df.head(sample_n).copy()
+                with st.spinner("Classifying emotions..."):
+                    st.session_state["cx_emotion_result"] = classify_emotions(subset, cx_text_col)
+
+            emotion_result = st.session_state.get("cx_emotion_result")
+            if emotion_result is not None:
+                counts = emotion_result["emotion"].value_counts().reset_index()
+                counts.columns = ["emotion", "count"]
+                fig = px.bar(counts, x="emotion", y="count", title="Emotion Distribution")
+                st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(
+                    emotion_result[[cx_text_col, "emotion", "emotion_conf"]].head(50),
+                    hide_index=True, use_container_width=True,
+                )
+            else:
+                st.info("Click 'Run emotion classification' to see results.")
+
+        # -- Root Cause x Emotion ---------------------------------------------------
+        with root_cause_subtab:
+            st.subheader("Root Cause x Emotion Cross-Tab")
+            st.caption(
+                "Which emotion dominates each business issue? e.g. frustration "
+                "clustering around wait times, betrayal around portion/value complaints."
+            )
+            emotion_result = st.session_state.get("cx_emotion_result")
+            if emotion_result is None:
+                st.info("Run emotion classification first (previous sub-tab).")
+            elif not cx_issue_col or cx_issue_col not in emotion_result.columns:
+                st.warning(
+                    "No issue-category column found in the loaded data to cross-tab "
+                    "against emotion (expected 'predicted_issue_category' or 'issue_cluster')."
+                )
+            else:
+                counts, row_pct = build_crosstab(emotion_result, cx_issue_col, "emotion")
+                fig = px.imshow(
+                    row_pct, text_auto=".0f", aspect="auto", color_continuous_scale="YlOrRd",
+                    labels=dict(x="Emotion", y="Issue Cluster", color="% of cluster"),
+                    title="Emotion Composition per Issue Cluster (row %)",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                summary = dominant_emotion_summary(row_pct)
+                st.dataframe(summary, hide_index=True, use_container_width=True)
+
+        # -- Escalation Detection -----------------------------------------------------
+        with escalation_subtab:
+            st.subheader("Escalation / Urgency Detection")
+            st.caption(
+                "Transparent, tunable urgency score = emotion weight + severity-keyword "
+                "weight + rating weight + recency weight. Flags reviews needing immediate "
+                "attention instead of waiting for the next pipeline re-run."
+            )
+            emotion_result = st.session_state.get("cx_emotion_result")
+            if emotion_result is None:
+                st.info("Run emotion classification first (first sub-tab).")
+            else:
+                urgency_df = compute_urgency(
+                    emotion_result, cx_text_col, "emotion",
+                    cx_rating_col or "rating", cx_date_col,
+                )
+                flagged = urgency_df[urgency_df["escalate"]].sort_values("urgency_score", ascending=False)
+
+                c1, c2 = st.columns(2)
+                c1.metric("Reviews analyzed", len(urgency_df))
+                c2.metric(
+                    "Escalated", len(flagged),
+                    f"{len(flagged) / max(len(urgency_df), 1) * 100:.1f}%",
+                )
+
+                display_cols = [cx_text_col, "urgency_score"]
+                if cx_rating_col and cx_rating_col in flagged.columns:
+                    display_cols.append(cx_rating_col)
+                if flagged.empty:
+                    st.success("No reviews crossed the escalation threshold in this sample.")
+                else:
+                    st.dataframe(flagged[display_cols], hide_index=True, use_container_width=True)
+
+                if cx_issue_col and cx_issue_col in urgency_df.columns:
+                    alerts = cluster_level_alert(urgency_df, cx_issue_col)
+                    if not alerts.empty:
+                        st.subheader("Escalation Rate by Issue Cluster")
+                        st.dataframe(alerts, hide_index=True, use_container_width=True)
+
+        # -- Empathetic Reply Drafts -----------------------------------------------------
+        with reply_subtab:
+            st.subheader("Draft an Empathetic Reply")
+            st.caption(
+                "Acknowledges the SPECIFIC emotion + issue instead of a generic "
+                "'sorry for the inconvenience' template. Always a draft for human "
+                "review/edit before posting -- never auto-posted."
+            )
+            draft_review_text = st.text_area(
+                "Review text",
+                value=cx_source_df[cx_text_col].iloc[0] if len(cx_source_df) else "",
+                height=90, key="reply_review_text",
+            )
+            col_a, col_b, col_c = st.columns(3)
+            draft_emotion = col_a.selectbox("Detected emotion", EMOTION_TAXONOMY, key="reply_emotion")
+            draft_issue = col_b.text_input("Issue category", value="your experience", key="reply_issue")
+            draft_chain = col_c.text_input("Restaurant chain (optional)", value="", key="reply_chain")
+
+            if st.button("Draft reply", key="draft_reply_btn"):
+                one_row = pd.DataFrame({
+                    "review_text": [draft_review_text],
+                    "emotion": [draft_emotion],
+                    "issue_cluster": [draft_issue],
+                    "chain": [draft_chain],
+                })
+                with st.spinner("Drafting reply..."):
+                    drafted = generate_replies(one_row, "review_text", "emotion", "issue_cluster", "chain")
+                st.session_state["cx_draft_reply"] = drafted["draft_reply"].iloc[0]
+
+            draft_text = st.session_state.get("cx_draft_reply")
+            if draft_text:
+                st.text_area("Draft reply (edit before posting)", value=draft_text, height=100, key="draft_reply_output")
+
 
 with about_tab:
     st.header("About This Project")
