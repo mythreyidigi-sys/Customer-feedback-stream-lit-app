@@ -25,7 +25,23 @@ by build_survey_template.py, for the field-collection instrument).
 """
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from scipy.stats import spearmanr
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+RAW_RESPONSES_PATH = BASE_DIR / "Restaurant Survey (Responses)SERVQUAL.xlsx"
+CLEANED_RESPONSES_PATH = BASE_DIR / "outputs" / "cleaned_servqual_responses.xlsx"
+
+QUESTION_DIMENSIONS = {
+    "arrival": ("Responsiveness", "arrival"),
+    "quality of food": ("Reliability", "food_quality"),
+    "staff behaviour": ("Empathy", "staff_behaviour"),
+    "cleanliness": ("Tangibles", "cleanliness"),
+    "ambience": ("Tangibles", "ambience"),
+    "consistency": ("Reliability", "consistency"),
+    "personalised": ("Empathy", "attentiveness"),
+    "billing": ("Reliability", "billing"),
+}
 
 # ---------------------------------------------------------------------
 # 1. SERVQUAL question bank (5 dimensions x ~4 items each)
@@ -76,6 +92,43 @@ DIMENSION_TO_ISSUE_CATEGORY = {
 }
 
 
+def clean_survey_responses(raw_responses: pd.DataFrame) -> pd.DataFrame:
+    """Remove incomplete submissions and normalize real form columns."""
+    responses = raw_responses.dropna(how="all").copy()
+    restaurant_column = "1. Restaurant Name"
+    responses[restaurant_column] = responses[restaurant_column].astype("string").str.strip()
+    responses = responses[responses[restaurant_column].notna() & responses[restaurant_column].ne("")]
+    responses["Timestamp"] = pd.to_datetime(responses["Timestamp"], unit="ms", errors="coerce")
+    responses = responses.dropna(subset=["Timestamp"])
+
+    cleaned = responses[["Timestamp", restaurant_column]].rename(
+        columns={restaurant_column: "restaurant"}
+    )
+    score_columns = []
+    for question_hint, (dimension, item_name) in QUESTION_DIMENSIONS.items():
+        matching_columns = [
+            column for column in responses.columns if question_hint in column.lower()
+        ]
+        expectation_column = next(
+            (column for column in matching_columns if "expectation" in column.lower()), None
+        )
+        actual_column = next(
+            (column for column in matching_columns if "actual" in column.lower()), None
+        )
+        if expectation_column is None or actual_column is None:
+            raise ValueError(f"Could not find expectation/actual columns for {question_hint}.")
+
+        expectation_name = f"{dimension}|{item_name}|E"
+        actual_name = f"{dimension}|{item_name}|P"
+        cleaned[expectation_name] = pd.to_numeric(responses[expectation_column], errors="coerce")
+        cleaned[actual_name] = pd.to_numeric(responses[actual_column], errors="coerce")
+        score_columns.extend([expectation_name, actual_name])
+
+    cleaned = cleaned.dropna(subset=score_columns)
+    cleaned = cleaned[(cleaned[score_columns] >= 1).all(axis=1) & (cleaned[score_columns] <= 7).all(axis=1)]
+    return cleaned.reset_index(drop=True)
+
+
 def score_survey(responses_df):
     """responses_df: one row per respondent, columns = 'Dimension|item text|E'
     or '...|P' for expectation/perception on a 1-7 Likert scale (see
@@ -86,8 +139,10 @@ def score_survey(responses_df):
     """
     records = []
     for dim, items in SERVQUAL_ITEMS.items():
-        exp_cols = [f"{dim}|{i}|E" for i in range(len(items))]
-        per_cols = [f"{dim}|{i}|P" for i in range(len(items))]
+        exp_cols = [column for column in responses_df.columns if column.startswith(f"{dim}|") and column.endswith("|E")]
+        per_cols = [column for column in responses_df.columns if column.startswith(f"{dim}|") and column.endswith("|P")]
+        if not exp_cols or not per_cols:
+            continue
         mean_e = responses_df[exp_cols].values.mean()
         mean_p = responses_df[per_cols].values.mean()
         records.append({
@@ -95,7 +150,7 @@ def score_survey(responses_df):
             "mean_expectation": round(mean_e, 2),
             "mean_perception": round(mean_p, 2),
             "mean_gap": round(mean_p - mean_e, 2),  # negative = shortfall
-            "n_items": len(items),
+            "n_items": len(exp_cols),
         })
     result = pd.DataFrame(records).sort_values("mean_gap")
     return result
@@ -177,9 +232,19 @@ INTERIM_ISSUE_FREQUENCY = {
 
 
 if __name__ == "__main__":
-    responses = generate_sample_responses()
+    if not RAW_RESPONSES_PATH.exists():
+        raise FileNotFoundError(f"Survey response file not found: {RAW_RESPONSES_PATH}")
+
+    raw_responses = pd.read_excel(RAW_RESPONSES_PATH)
+    responses = clean_survey_responses(raw_responses)
+    CLEANED_RESPONSES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    responses.to_excel(CLEANED_RESPONSES_PATH, index=False)
+    print(
+        f"Cleaned survey responses: {len(responses)} of {len(raw_responses.dropna(how='all'))} "
+        f"nonblank submissions saved to {CLEANED_RESPONSES_PATH}"
+    )
     scores = score_survey(responses)
-    print("SERVQUAL dimension scores (from synthetic sample respondents):")
+    print("SERVQUAL dimension scores (from cleaned survey responses):")
     print(scores.to_string(index=False))
 
     merged, rho = triangulate(scores, INTERIM_ISSUE_FREQUENCY)
