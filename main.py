@@ -7,6 +7,8 @@ sidebar filter (restaurant chain / platform / date range) applied throughout.
 """
 import os
 import re
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -21,6 +23,30 @@ st.set_page_config(page_title="Restaurant Review Issue Analysis", layout="wide")
 st.title("Restaurant Review Issue Analysis")
 
 # ---------------------------------------------------------------------------
+# Optional CX helper copies are stored under scripts_new792026 when the
+# original root-level modules are unavailable. Register them under their normal
+# module names so the guarded imports below remain compatible.
+_CX_COPY_DIR = BASE_DIR / "scripts_new792026"
+def _load_cx_copy(module_name, filename):
+    module_path = _CX_COPY_DIR / filename
+    spec = spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load {module_name} from {module_path}")
+    module = module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+if not (BASE_DIR / "emotion_classification.py").exists():
+    try:
+        _load_cx_copy("cx_common", "cx_common (1).py")
+        _load_cx_copy("emotion_classification", "emotion_classification (1).py")
+        _load_cx_copy("root_cause_emotion_analysis", "root_cause_emotion_analysis (1).py")
+        _load_cx_copy("escalation_detection", "escalation_detection (1).py")
+        _load_cx_copy("empathetic_reply_generator", "empathetic_reply_generator (1).py")
+    except Exception:
+        pass
+
 # Optional pipeline modules (plain .py files alongside main.py). Each import
 # is wrapped so a missing file degrades to a warning in the relevant tab
 # instead of crashing the whole app.
