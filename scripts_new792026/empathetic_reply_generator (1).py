@@ -25,10 +25,24 @@ USAGE:
 """
 
 import argparse
+import importlib.util
+from pathlib import Path
+
 import pandas as pd
 from tqdm import tqdm
 
-from cx_common import get_client, call_groq_text, clean_review_text
+try:
+    from cx_common import get_client, call_groq_text, clean_review_text
+except ModuleNotFoundError:
+    helper_path = Path(__file__).with_name("cx_common (1).py")
+    helper_spec = importlib.util.spec_from_file_location("cx_common", helper_path)
+    if helper_spec is None or helper_spec.loader is None:
+        raise
+    helper_module = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper_module)
+    get_client = helper_module.get_client
+    call_groq_text = helper_module.call_groq_text
+    clean_review_text = helper_module.clean_review_text
 
 SYSTEM_PROMPT = """You are drafting a restaurant manager's public reply to a negative
 customer review, on behalf of the business. Requirements:
