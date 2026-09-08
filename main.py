@@ -81,7 +81,17 @@ try:
     )
     SERVQUAL_MODULE_OK, SERVQUAL_IMPORT_ERROR = True, None
 except Exception as exc:  # noqa: BLE001
-    SERVQUAL_MODULE_OK, SERVQUAL_IMPORT_ERROR = False, str(exc)
+    try:
+        servqual_module = _load_cx_copy(
+            "servqual_survey_analysis", "servqual_survey_analysis (1).py"
+        )
+        score_survey = servqual_module.score_survey
+        triangulate = servqual_module.triangulate
+        SERVQUAL_ITEMS = servqual_module.SERVQUAL_ITEMS
+        INTERIM_ISSUE_FREQUENCY = servqual_module.INTERIM_ISSUE_FREQUENCY
+        SERVQUAL_MODULE_OK, SERVQUAL_IMPORT_ERROR = True, None
+    except Exception as fallback_exc:  # noqa: BLE001
+        SERVQUAL_MODULE_OK, SERVQUAL_IMPORT_ERROR = False, str(fallback_exc)
 
 
 def find_column(dataframe, candidates):
