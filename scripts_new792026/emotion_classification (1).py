@@ -21,10 +21,24 @@ USAGE:
 """
 
 import argparse
+import importlib.util
+from pathlib import Path
+
 import pandas as pd
 from tqdm import tqdm
 
-from cx_common import get_client, call_groq_json, clean_review_text
+try:
+    from cx_common import get_client, call_groq_json, clean_review_text
+except ModuleNotFoundError:
+    helper_path = Path(__file__).with_name("cx_common (1).py")
+    helper_spec = importlib.util.spec_from_file_location("cx_common", helper_path)
+    if helper_spec is None or helper_spec.loader is None:
+        raise
+    helper_module = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper_module)
+    get_client = helper_module.get_client
+    call_groq_json = helper_module.call_groq_json
+    clean_review_text = helper_module.clean_review_text
 
 # Fixed emotion taxonomy -- kept small and business-relevant on purpose.
 # A large open taxonomy (20+ emotions) fragments cluster sizes and becomes
