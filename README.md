@@ -14,6 +14,21 @@ pip install -r requirements.txt
 streamlit run main.py
 ```
 
+## Staff Access
+
+The public app shows only **Customer Review Intake**. The analysis, alert,
+reply, and resolution tabs are available only after a staff member selects
+**Staff login** and enters the `STAFF_PASSWORD` configured for the app.
+
+For Streamlit Community Cloud, add the password at **App settings -> Secrets**:
+
+```toml
+STAFF_PASSWORD = "set-the-password-provided-by-the-app-owner"
+```
+
+For local development, place the same value in `.streamlit/secrets.toml`.
+That file is ignored by Git and must not be committed.
+
 ## App Structure (`main.py`)
 
 | Tab | What it does |

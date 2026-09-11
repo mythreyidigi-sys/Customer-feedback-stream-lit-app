@@ -20,7 +20,46 @@ import streamlit as st
 
 BASE_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="Restaurant Review Issue Analysis", layout="wide")
-st.title("Restaurant Review Issue Analysis")
+
+
+def get_staff_password():
+    """Read the staff password from Streamlit Cloud's private secrets store."""
+    try:
+        return st.secrets["STAFF_PASSWORD"]
+    except (FileNotFoundError, KeyError):
+        return os.getenv("STAFF_PASSWORD")
+
+
+st.session_state.setdefault("staff_authenticated", False)
+st.session_state.setdefault("show_staff_login", False)
+
+title_col, staff_col = st.columns([5, 1])
+with title_col:
+    st.title("Restaurant Review Issue Analysis")
+
+with staff_col:
+    if st.session_state["staff_authenticated"]:
+        if st.button("Staff logout", key="staff_logout"):
+            st.session_state["staff_authenticated"] = False
+            st.rerun()
+    elif st.button("Staff login", key="staff_login"):
+        st.session_state["show_staff_login"] = True
+
+if not st.session_state["staff_authenticated"] and st.session_state["show_staff_login"]:
+    with st.form("staff_login_form"):
+        entered_password = st.text_input("Staff password", type="password")
+        submitted = st.form_submit_button("Sign in")
+
+    if submitted:
+        configured_password = get_staff_password()
+        if not configured_password:
+            st.error("Staff access is not configured. Add STAFF_PASSWORD to the app secrets.")
+        elif entered_password == configured_password:
+            st.session_state["staff_authenticated"] = True
+            st.session_state["show_staff_login"] = False
+            st.rerun()
+        else:
+            st.error("Incorrect staff password.")
 
 # ---------------------------------------------------------------------------
 # Optional CX helper copies are stored under scripts_new792026 when the
@@ -284,37 +323,40 @@ def show_top_metrics(df):
 # Load data + render sidebar
 # ---------------------------------------------------------------------------
 working_df, base_source_path, synthesized_rating, synthesized_date = get_working_dataset()
-sel_restaurants, sel_platforms, sel_start, sel_end = render_sidebar_filters(working_df)
-filtered_df = apply_filters(working_df, sel_restaurants, sel_platforms, sel_start, sel_end)
+if st.session_state["staff_authenticated"]:
+    sel_restaurants, sel_platforms, sel_start, sel_end = render_sidebar_filters(working_df)
+    filtered_df = apply_filters(working_df, sel_restaurants, sel_platforms, sel_start, sel_end)
+else:
+    filtered_df = working_df
 
-if synthesized_rating or synthesized_date:
+if st.session_state["staff_authenticated"] and (synthesized_rating or synthesized_date):
     st.warning(
         "This dataset has no ratings or review dates. Neutral ratings and "
         "the current date are being used, so reputation scores and "
         "week-over-week alerts are illustrative."
     )
 
-(
-    intake_tab, reviews_tab, servqual_tab, emotion_tab, rootcause_tab,
-    escalation_tab, reply_tab, earlywarning_tab, resolution_tab,
-) = st.tabs(
-    [
-        "Customer Review Intake",
-        "Existing Reviews",
-        "SERVQUAL Survey",
-        "Emotion Analysis",
-        "Root Cause Analysis",
-        "Escalation Alerts",
-        "Empathetic Reply",
-        "Early-Warning Alerts",
-        "Resolution Workflow",
-    ]
-)
+if st.session_state["staff_authenticated"]:
+    (
+        reviews_tab, servqual_tab, emotion_tab, rootcause_tab,
+        escalation_tab, reply_tab, earlywarning_tab, resolution_tab,
+    ) = st.tabs(
+        [
+            "Existing Reviews",
+            "SERVQUAL Survey",
+            "Emotion Analysis",
+            "Root Cause Analysis",
+            "Escalation Alerts",
+            "Empathetic Reply",
+            "Early-Warning Alerts",
+            "Resolution Workflow",
+        ]
+    )
 
 # ===========================================================================
 # TAB: Customer Review Intake
 # ===========================================================================
-with intake_tab:
+def render_customer_review_intake():
     st.header("Customer Review Intake")
     st.caption("Submit a review to run sentiment, issue, severity, branch, and reputation-risk analysis.")
 
@@ -373,6 +415,12 @@ with intake_tab:
             st.session_state.setdefault("intake_reviews", []).append(new_row)
             st.success("Review added to the working dataset for this session.")
             st.cache_data.clear()
+
+if not st.session_state["staff_authenticated"]:
+    render_customer_review_intake()
+    st.stop()
+
+classifier_model, classifier_vectorizer, _ = load_classifier()
 
 # ===========================================================================
 # TAB: Existing Reviews
