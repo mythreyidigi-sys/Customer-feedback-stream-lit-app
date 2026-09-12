@@ -194,7 +194,7 @@ def load_base_dataset():
     branch_col = find_column(df, ["branch", "Branch"])
     platform_col = find_column(df, ["source", "platform", "Source", "Platform"])
     rating_col = find_column(df, ["rating", "Rating"])
-    date_col = find_column(df, ["review_date", "date", "Date"])
+    date_col = find_column(df, ["review_date", "Review_Date", "date", "Date"])
     issue_col = find_column(df, ["predicted_issue_category", "issue_cluster", "issue_category"])
 
     df["review_text"] = df[text_col] if text_col else ""
@@ -330,10 +330,16 @@ else:
     filtered_df = working_df
 
 if st.session_state["staff_authenticated"] and (synthesized_rating or synthesized_date):
+    missing_fields = []
+    if synthesized_rating:
+        missing_fields.append("ratings")
+    if synthesized_date:
+        missing_fields.append("review dates")
+    missing_text = " and ".join(missing_fields)
     st.warning(
-        "This dataset has no ratings or review dates. Neutral ratings and "
-        "the current date are being used, so reputation scores and "
-        "week-over-week alerts are illustrative."
+        f"This dataset has no {missing_text}. "
+        "Neutral ratings and synthetic dates are being used only where needed, "
+        "so reputation scores and week-over-week alerts may be illustrative."
     )
 
 if st.session_state["staff_authenticated"]:
