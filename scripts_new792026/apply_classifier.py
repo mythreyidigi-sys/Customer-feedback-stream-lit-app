@@ -31,7 +31,7 @@ print(f"Using column '{review_col}' for review text")
 df["review_text"] = df[review_col]
 
 # Load trained classifier
-classifier_path = BASE_DIR / "scripts" / "issue_classifier.joblib"
+classifier_path = BASE_DIR / "scripts_new792026" / "issue_classifier.joblib"
 print(f"\nLoading classifier from: {classifier_path}")
 bundle = joblib.load(classifier_path)
 model = bundle["model"]
