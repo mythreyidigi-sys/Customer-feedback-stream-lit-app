@@ -175,7 +175,7 @@ def load_classifier():
 def load_base_dataset():
     """Load the review dataset and standardize column names.
 
-    Returns (df, source_path, synthesized_rating, synthesized_date).
+    Returns (df, source_path, synthesized_rating, missing_date).
     """
     raw_df, source_path = None, None
     for rel in CANDIDATE_BASE_FILES:
@@ -208,18 +208,12 @@ def load_base_dataset():
     else:
         df["rating"] = 3  # neutral placeholder
 
-    synthesized_date = date_col is None
+    missing_date = date_col is None
     if date_col:
         df["review_date"] = pd.to_datetime(df[date_col], errors="coerce")
-        df["review_date"] = df["review_date"].fillna(pd.Timestamp.now())
+        missing_date = df["review_date"].notna().sum() == 0
     else:
-        # Spread synthetic dates over the last 8 weeks (deterministic by row
-        # index) so week-over-week spike detection has something to compare,
-        # rather than dumping every review into "this week" only.
-        rng = np.random.default_rng(42)
-        offsets_days = rng.integers(0, 56, size=len(df))
-        now = pd.Timestamp.now().normalize()
-        df["review_date"] = [now - pd.Timedelta(days=int(d)) for d in offsets_days]
+        df["review_date"] = pd.NaT
 
     if issue_col:
         df["issue_cluster"] = df[issue_col]
@@ -227,7 +221,7 @@ def load_base_dataset():
         df["issue_cluster"] = pd.NA
 
     keep_cols = ["review_text", "restaurant", "branch", "platform", "rating", "review_date", "issue_cluster"]
-    return df[keep_cols].reset_index(drop=True), source_path, synthesized_rating, synthesized_date
+    return df[keep_cols].reset_index(drop=True), source_path, synthesized_rating, missing_date
 
 
 def apply_classifier_to_dataframe(df, model, vectorizer):
@@ -322,24 +316,24 @@ def show_top_metrics(df):
 # ---------------------------------------------------------------------------
 # Load data + render sidebar
 # ---------------------------------------------------------------------------
-working_df, base_source_path, synthesized_rating, synthesized_date = get_working_dataset()
+working_df, base_source_path, synthesized_rating, missing_date = get_working_dataset()
 if st.session_state["staff_authenticated"]:
     sel_restaurants, sel_platforms, sel_start, sel_end = render_sidebar_filters(working_df)
     filtered_df = apply_filters(working_df, sel_restaurants, sel_platforms, sel_start, sel_end)
 else:
     filtered_df = working_df
 
-if st.session_state["staff_authenticated"] and (synthesized_rating or synthesized_date):
+if st.session_state["staff_authenticated"] and (synthesized_rating or missing_date):
     missing_fields = []
     if synthesized_rating:
         missing_fields.append("ratings")
-    if synthesized_date:
+    if missing_date:
         missing_fields.append("review dates")
     missing_text = " and ".join(missing_fields)
     st.warning(
         f"This dataset has no {missing_text}. "
-        "Neutral ratings and synthetic dates are being used only where needed, "
-        "so reputation scores and week-over-week alerts may be illustrative."
+        "Neutral ratings are being used only where needed; date-based analysis "
+        "uses only the dates present in the dataset."
     )
 
 if st.session_state["staff_authenticated"]:

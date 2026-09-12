@@ -49,7 +49,7 @@ instead of crashing, so the app always loads.
 ## Data Flow
 
 1. **Base dataset**: loaded from `outputs/reviews_with_issue_classification.xlsx` if present, else `outputs/cleaned_reviews.xlsx`. Columns are auto-detected and standardized (`review_text`, `restaurant`, `branch`, `platform`, `rating`, `review_date`, `issue_cluster`) regardless of the exact source column names.
-2. **Missing rating/date columns**: if your dataset has no rating or review-date column, the app shows a banner and substitutes a neutral rating (3) and synthetic dates spread over the last 8 weeks, so Escalation Alerts still have something meaningful to compute against. Replace with real rating/date columns for accurate results.
+2. **Missing rating/date columns**: if your dataset has no rating or review-date column, the app shows a banner and substitutes a neutral rating (3) only. Date-based analysis uses only real dates present in the dataset.
 3. **Classifier**: loaded from `scripts/issue_classifier.joblib` (also checks `scripts_new792026/issue_classifier.joblib` as a fallback path). Applied on demand from the Existing Reviews tab, and automatically to any new review added via Customer Review Intake.
 4. **Emotion / Escalation / Reply**: computed live in the app via `emotion_classification.py`, `escalation_detection.py`, `empathetic_reply_generator.py` (shared helper: `cx_common.py`) — no offline pre-computation required, though these also work if you run them offline and wire in their outputs.
 5. **SERVQUAL**: two supported formats, auto-detected:
