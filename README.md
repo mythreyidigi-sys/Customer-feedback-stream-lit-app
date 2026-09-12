@@ -2,7 +2,7 @@
 
 BITS Pilani MBA Dissertation | Student: N.R. Mythreyi | BITS ID: 2024MB22535
 
-A 9-tab Streamlit dashboard for mining, triaging, and resolving customer
+An 8-tab Streamlit dashboard for mining, triaging, and resolving customer
 experience issues from restaurant reviews — from intake through to
 resolution — with a global sidebar filter (restaurant chain / platform /
 review date range) applied across every tab.
@@ -40,8 +40,7 @@ That file is ignored by Git and must not be committed.
 | Root Cause Analysis | Cross-tabs emotion against issue category as a heatmap, plus a dominant-emotion-per-issue table |
 | Escalation Alerts | Transparent urgency scoring (emotion + severity keywords + rating + recency); flags reviews needing immediate attention, plus escalation rate by issue |
 | Empathetic Reply | Interactive draft-a-reply tool, issue/emotion/restaurant-aware, always a human-review draft |
-| Early-Warning Alerts | Week-over-week complaint-volume spike detection per restaurant/branch/issue, with a platform-breakdown drill-down |
-| Resolution Workflow | Tracks corrective action (status, assignee, action taken, date, notes) for every flagged issue from Early-Warning Alerts and Escalation Alerts |
+| Resolution Workflow | Tracks corrective action (status, assignee, action taken, date, notes) for every escalated issue |
 
 Every tab degrades gracefully: if a required file or a previous step's
 output isn't available yet, that tab shows a warning or an info message
@@ -50,7 +49,7 @@ instead of crashing, so the app always loads.
 ## Data Flow
 
 1. **Base dataset**: loaded from `outputs/reviews_with_issue_classification.xlsx` if present, else `outputs/cleaned_reviews.xlsx`. Columns are auto-detected and standardized (`review_text`, `restaurant`, `branch`, `platform`, `rating`, `review_date`, `issue_cluster`) regardless of the exact source column names.
-2. **Missing rating/date columns**: if your dataset has no rating or review-date column, the app shows a banner and substitutes a neutral rating (3) and synthetic dates spread over the last 8 weeks, so Early-Warning Alerts and Escalation Alerts still have something meaningful to compute against. Replace with real rating/date columns for accurate results.
+2. **Missing rating/date columns**: if your dataset has no rating or review-date column, the app shows a banner and substitutes a neutral rating (3) and synthetic dates spread over the last 8 weeks, so Escalation Alerts still have something meaningful to compute against. Replace with real rating/date columns for accurate results.
 3. **Classifier**: loaded from `scripts/issue_classifier.joblib` (also checks `scripts_new792026/issue_classifier.joblib` as a fallback path). Applied on demand from the Existing Reviews tab, and automatically to any new review added via Customer Review Intake.
 4. **Emotion / Escalation / Reply**: computed live in the app via `emotion_classification.py`, `escalation_detection.py`, `empathetic_reply_generator.py` (shared helper: `cx_common.py`) — no offline pre-computation required, though these also work if you run them offline and wire in their outputs.
 5. **SERVQUAL**: two supported formats, auto-detected:
@@ -92,8 +91,8 @@ GROQ_API_KEY = "your_key_here"
   rather than a black-box LLM score — defensible and explainable in front
   of an evaluator panel.
 - Reply drafts are always a human-review draft, never auto-posted.
-- Early-warning spikes and reputation scores are explicitly labeled as
-  illustrative when the underlying dataset has no real rating/date columns.
-- Resolution Workflow closes the loop: issue detected (Early-Warning /
-  Escalation) → corrective action tracked → status updated — directly
+- Reputation scores are explicitly labeled as illustrative when the
+  underlying dataset has no real rating/date columns.
+- Resolution Workflow closes the loop: issue detected (Escalation) →
+  corrective action tracked → status updated — directly
   supporting the report's decision-support framing.

@@ -1,8 +1,8 @@
 """Restaurant Review Issue Analysis -- unified Streamlit dashboard.
 
-Rebuilt to match the 9-tab layout: Customer Review Intake, Existing Reviews,
+Rebuilt to match the 8-tab layout: Customer Review Intake, Existing Reviews,
 SERVQUAL Survey, Emotion Analysis, Root Cause Analysis, Escalation Alerts,
-Empathetic Reply, Early-Warning Alerts, Resolution Workflow -- with a global
+Empathetic Reply, Resolution Workflow -- with a global
 sidebar filter (restaurant chain / platform / date range) applied throughout.
 """
 import os
@@ -345,7 +345,7 @@ if st.session_state["staff_authenticated"] and (synthesized_rating or synthesize
 if st.session_state["staff_authenticated"]:
     (
         reviews_tab, servqual_tab, emotion_tab, rootcause_tab,
-        escalation_tab, reply_tab, earlywarning_tab, resolution_tab,
+        escalation_tab, reply_tab, resolution_tab,
     ) = st.tabs(
         [
             "Existing Reviews",
@@ -354,7 +354,6 @@ if st.session_state["staff_authenticated"]:
             "Root Cause Analysis",
             "Escalation Alerts",
             "Empathetic Reply",
-            "Early-Warning Alerts",
             "Resolution Workflow",
         ]
     )
@@ -803,60 +802,6 @@ with reply_tab:
             st.text_area("Draft reply (edit before posting)", value=st.session_state["draft_reply_text"], height=110, key="draft_reply_output")
 
 # ===========================================================================
-# TAB: Early-Warning Alerts
-# ===========================================================================
-with earlywarning_tab:
-    st.header("Early-Warning Alerts (Week-over-Week Spikes)")
-
-    if filtered_df is None or filtered_df["issue_cluster"].isna().all():
-        st.info("No classified reviews available yet -- visit Existing Reviews and apply the classifier first.")
-    else:
-        restaurant_filter_options = ["All"] + sorted(filtered_df["restaurant"].dropna().unique().tolist())
-        chosen_restaurant = st.selectbox("Filter by restaurant", restaurant_filter_options, key="ew_restaurant_filter")
-
-        scoped = filtered_df.dropna(subset=["issue_cluster"]).copy()
-        if chosen_restaurant != "All":
-            scoped = scoped[scoped["restaurant"] == chosen_restaurant]
-
-        now = pd.Timestamp.now().normalize()
-        this_week_start = now - pd.Timedelta(days=7)
-        last_week_start = now - pd.Timedelta(days=14)
-
-        this_week = scoped[scoped["review_date"] >= this_week_start]
-        last_week = scoped[(scoped["review_date"] >= last_week_start) & (scoped["review_date"] < this_week_start)]
-
-        group_cols = ["restaurant", "branch", "issue_cluster"]
-        this_counts = this_week.groupby(group_cols).size().rename("this_week")
-        last_counts = last_week.groupby(group_cols).size().rename("last_week")
-        spike_df = pd.concat([this_counts, last_counts], axis=1).fillna(0).reset_index()
-        spike_df["this_week"] = spike_df["this_week"].astype(int)
-        spike_df["last_week"] = spike_df["last_week"].astype(int)
-        spikes = spike_df[spike_df["this_week"] > spike_df["last_week"]].sort_values("this_week", ascending=False)
-
-        st.session_state["early_warning_spikes"] = spikes  # shared with Resolution Workflow tab
-
-        if spikes.empty:
-            st.success("No week-over-week complaint spikes detected for the current filters.")
-        else:
-            for _, row in spikes.iterrows():
-                severity = "High" if row["this_week"] >= 3 else "Medium"
-                color = "\U0001F534" if severity == "High" else "\U0001F7E1"
-                with st.container(border=True):
-                    st.markdown(f"{color} **REPUTATION ALERT \u2014 {severity} severity**")
-                    st.markdown(f"**Restaurant**  \n{row['restaurant']}")
-                    st.markdown(f"**Branch**  \n{row['branch']}")
-                    st.markdown(f"**Issue**  \n{row['issue_cluster']}")
-                    st.write(f"This week: **{row['this_week']}** complaints | Last week: **{row['last_week']}** complaints")
-                    with st.expander("Which platform is driving this spike?"):
-                        combo_reviews = this_week[
-                            (this_week["restaurant"] == row["restaurant"])
-                            & (this_week["branch"] == row["branch"])
-                            & (this_week["issue_cluster"] == row["issue_cluster"])
-                        ]
-                        platform_breakdown = combo_reviews["platform"].value_counts()
-                        st.dataframe(platform_breakdown.rename("complaints"), use_container_width=True)
-
-# ===========================================================================
 # TAB: Resolution Workflow
 # ===========================================================================
 with resolution_tab:
@@ -867,15 +812,12 @@ with resolution_tab:
         "reboots, wire this to a Google Sheet or small database)."
     )
 
-    spikes = st.session_state.get("early_warning_spikes")
     escalation_flagged = None
     if ESCALATION_MODULE_OK and st.session_state.get("emotion_result") is not None:
         urgency_df = compute_urgency(st.session_state["emotion_result"], "review_text", "emotion", "rating", "review_date")
         escalation_flagged = urgency_df[urgency_df["escalate"]]
 
     combos = []
-    if spikes is not None and len(spikes):
-        combos += list(spikes[["restaurant", "branch", "issue_cluster"]].itertuples(index=False, name=None))
     if escalation_flagged is not None and len(escalation_flagged):
         combos += list(
             escalation_flagged.dropna(subset=["issue_cluster"])[["restaurant", "branch", "issue_cluster"]]
@@ -884,7 +826,7 @@ with resolution_tab:
     combos = sorted(set(combos))
 
     if not combos:
-        st.info("No flagged issues yet -- check Early-Warning Alerts or Escalation Alerts first.")
+        st.info("No escalated issues yet -- check Escalation Alerts first.")
     else:
         workflow_state = st.session_state.setdefault("resolution_workflow", {})
 
