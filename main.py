@@ -115,6 +115,12 @@ except Exception as exc:  # noqa: BLE001
     REPLY_MODULE_OK, REPLY_IMPORT_ERROR = False, str(exc)
 
 try:
+    from recommendation_tab import render_recommendation_tab
+    RECOMMENDATION_MODULE_OK, RECOMMENDATION_IMPORT_ERROR = True, None
+except Exception as exc:  # noqa: BLE001
+    RECOMMENDATION_MODULE_OK, RECOMMENDATION_IMPORT_ERROR = False, str(exc)
+
+try:
     from servqual_survey_analysis import (
         score_survey, triangulate, SERVQUAL_ITEMS, INTERIM_ISSUE_FREQUENCY,
     )
@@ -339,7 +345,7 @@ if st.session_state["staff_authenticated"] and (synthesized_rating or missing_da
 if st.session_state["staff_authenticated"]:
     (
         reviews_tab, servqual_tab, emotion_tab, rootcause_tab,
-        escalation_tab, reply_tab, resolution_tab,
+        escalation_tab, reply_tab, resolution_tab, recommendation_tab,
     ) = st.tabs(
         [
             "Existing Reviews",
@@ -349,6 +355,7 @@ if st.session_state["staff_authenticated"]:
             "Escalation Alerts",
             "Empathetic Reply",
             "Resolution Workflow",
+            "Recommendations",
         ]
     )
 
@@ -849,3 +856,20 @@ with resolution_tab:
                         "action_date": action_date, "notes": notes,
                     }
                     st.success("Saved.")
+
+# ===========================================================================
+# TAB: Recommendations
+# ===========================================================================
+with recommendation_tab:
+    show_top_metrics(filtered_df)
+    if not RECOMMENDATION_MODULE_OK:
+        st.warning("The recommendation engine could not be loaded.")
+        with st.expander("Import error details"):
+            st.code(RECOMMENDATION_IMPORT_ERROR or "Unknown import error")
+    else:
+        render_recommendation_tab(
+            filtered_df,
+            chain_col="restaurant",
+            issue_col="issue_cluster",
+            date_col="review_date",
+        )
