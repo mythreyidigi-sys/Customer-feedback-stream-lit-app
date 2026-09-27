@@ -29,10 +29,10 @@ Setup:
 This file needs the `engine/` package. It looks for it next to main.py first,
 then in empathy_engine/ and scripts_new792026/empathy_engine (5)/empathy_engine/.
 """
-import difflib
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from uuid import uuid4
 
 # ------------------------------------------------------------------ locate the engine package
 _HERE = Path(__file__).resolve().parent
@@ -151,6 +151,55 @@ def resolve_upload_source(file_name, selected_source):
     raise ValueError(f"Can't detect the source from '{file_name}'. Choose Google, Zomato, or TripAdvisor manually.")
 
 
+def render_upload_analyse_form(key_prefix):
+    notice = st.session_state.pop("upload_notice", None)
+    if notice:
+        st.success(notice)
+
+    st.markdown("### Upload reviews")
+    platform_col, date_col, file_col = st.columns([1.2, 1, 2.5])
+    selected_source = platform_col.selectbox(
+        "Review platform", [AUTO_DETECT_SOURCE, *SOURCES], key=f"{key_prefix}_platform"
+    )
+    scraped_on = date_col.date_input(
+        "Date scraped", date.today(), key=f"{key_prefix}_scraped_on",
+        help="Used to convert relative review dates such as '3 weeks ago'.",
+    )
+    uploaded_files = file_col.file_uploader(
+        "Review files", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
+        key=f"{key_prefix}_files",
+    )
+
+    if st.button("Analyse", type="primary", key=f"{key_prefix}_analyse", disabled=not uploaded_files):
+        batch_id = uuid4().hex
+        imported_files, added_reviews, errors = 0, 0, []
+        for uploaded_file in uploaded_files:
+            try:
+                upload_source = resolve_upload_source(uploaded_file.name, selected_source)
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+            path = RAW_DIR / upload_source.lower() / uploaded_file.name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(uploaded_file.getbuffer())
+            result = import_file(path, upload_source, scraped_on, batch_id=batch_id, force_source=True)
+            if result["message"].startswith("ERROR"):
+                errors.append(f"{uploaded_file.name}: {result['message']}")
+            else:
+                imported_files += 1
+                added_reviews += result["added"]
+
+        if imported_files:
+            st.session_state["upload_notice"] = (
+                f"Analysed {imported_files} file(s); added {added_reviews:,} new reviews."
+            )
+            if errors:
+                st.session_state["upload_notice"] += f" {len(errors)} file(s) could not be analysed."
+            st.rerun()
+        for error in errors:
+            st.error(error)
+
+
 # ------------------------------------------------------------------ helpers (pure pandas)
 def is_noise(issue: pd.Series) -> pd.Series:
     """HDBSCAN outliers (label -1) or rows without a usable cluster label."""
@@ -203,30 +252,9 @@ df_all = db.load_reviews()
 if df_all.empty:
     st.title("💬 Empathy Engine")
     st.warning("No reviews in the database yet.")
-    st.markdown("""
-**Load your data in one of two ways**
-
-1. Put your files in `data/raw/google/`, `data/raw/zomato/`, `data/raw/tripadvisor/` and run
-   `python -m engine.importer --scraped-on YYYY-MM-DD`
-2. Or upload them below.
-
-Files that already carry an HDBSCAN issue / cluster label column keep that label.
-""")
-    source = st.selectbox("Review platform", [AUTO_DETECT_SOURCE, *SOURCES])
-    ups = st.file_uploader("Review files (CSV or Excel)", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
-    ref = st.date_input("Date the files were scraped (for '2 months ago' dates)", date.today())
-    if ups and st.button("Import", type="primary"):
-        for u in ups:
-            try:
-                upload_source = resolve_upload_source(u.name, source)
-            except ValueError as exc:
-                st.error(str(exc))
-                continue
-            path = RAW_DIR / upload_source.lower() / u.name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(u.getbuffer())
-            st.write(import_file(path, upload_source, ref, force_source=True))
-        st.rerun()
+    with st.container(border=True):
+        st.markdown("Upload review files to start analysing customer experience.")
+        render_upload_analyse_form("empty_state")
     st.stop()
 
 restaurants = sorted(df_all["restaurant"].unique())
@@ -278,37 +306,11 @@ def go_overview():
     ss.page = PAGES[1]
 
 
-def analyse_callback():
-    q = ss.get("search_q", "").strip().lower()
-    if not q:
-        return
-    names = {r.lower(): r for r in restaurants}
-    hit = next((names[n] for n in names if q in n), None)
-    if not hit:
-        close = difflib.get_close_matches(q, list(names), n=1, cutoff=0.3)
-        hit = names[close[0]] if close else None
-    if hit:
-        ss.restaurant = hit
-        ss.page = PAGES[1]
-        ss.search_msg = None
-    else:
-        ss.search_msg = f"No restaurant matching '{q}'. Known: {', '.join(restaurants)}"
-
-
 # ================================================================== 1. SEARCH
 if page == PAGES[0]:
     with st.container(border=True):
-        st.markdown("<h3 style='text-align:center'>What are customers saying about your restaurant?</h3>"
-                    "<p class='small' style='text-align:center'>Type a restaurant name. We'll gather its reviews "
-                    "from every source and show what to fix first.</p>", unsafe_allow_html=True)
-        _, mid, _ = st.columns([1, 3, 1])
-        with mid:
-            c1, c2 = st.columns([4, 1])
-            c1.text_input("Restaurant", value=ss.restaurant, key="search_q", label_visibility="collapsed",
-                          placeholder="e.g. Geetham, A2B, Sangeetha")
-            c2.button("Analyse", type="primary", on_click=analyse_callback, width="stretch")
-            if ss.get("search_msg"):
-                st.warning(ss.search_msg)
+        st.markdown("## Upload and analyse customer reviews")
+        render_upload_analyse_form("search")
         source_counts = rest_df["source"].value_counts()
         pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok") if source_counts.get(s, 0)
                         else pill(f"{s} · no data", "p-muted") for s in SOURCES)
@@ -346,28 +348,7 @@ if page == PAGES[0]:
         if missing:
             st.warning("Chains not in the database yet: " + ", ".join(missing))
 
-    with st.expander("📥 Add or update review files (Google / Zomato / TripAdvisor)"):
-        c1, c2 = st.columns(2)
-        src = c1.selectbox("Review platform", [AUTO_DETECT_SOURCE, *SOURCES])
-        ref = c2.date_input("Date the files were scraped", date.today(),
-                            help="Used to convert Google's '3 weeks ago' style dates into real dates.")
-        ups = st.file_uploader("CSV or Excel", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
-        if ups and st.button("Import files", type="primary"):
-            for u in ups:
-                try:
-                    upload_source = resolve_upload_source(u.name, src)
-                except ValueError as exc:
-                    st.error(str(exc))
-                    continue
-                path = RAW_DIR / upload_source.lower() / u.name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(u.getbuffer())
-                r = import_file(path, upload_source, ref, force_source=True)
-                (st.error if r["message"].startswith("ERROR") else st.success)(
-                    f"{u.name} ({upload_source}): {r['added']} new of {r['read']} rows. {r['message']}")
-            st.button("Refresh")
-        st.caption("Duplicates are skipped automatically, so re-uploading a file is safe. "
-                   "If your file has an issue/cluster label column (from HDBSCAN), it is kept.")
+    with st.expander("📥 Import history"):
         runs = db.load_runs()
         if len(runs):
             st.dataframe(runs[["started_at", "source", "file_name", "rows_read", "rows_added", "message"]],
