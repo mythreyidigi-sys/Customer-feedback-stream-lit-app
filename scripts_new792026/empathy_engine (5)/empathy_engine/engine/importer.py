@@ -61,6 +61,17 @@ def map_columns(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def source_from_filename(file_name: str) -> str | None:
+    name = re.sub(r"[_-]+", " ", file_name.lower())
+    if "zomato" in name:
+        return "Zomato"
+    if "tripadvisor" in name or "trip advisor" in name:
+        return "TripAdvisor"
+    if "google" in name:
+        return "Google"
+    return None
+
+
 # ----------------------------------------------------------------------------- cleaning
 def clean_text(t) -> str:
     if not isinstance(t, str):
@@ -154,10 +165,10 @@ def parse_date(v, ref: date):
         return None
 
 
-def normalise(df: pd.DataFrame, source: str, ref: date) -> pd.DataFrame:
+def normalise(df: pd.DataFrame, source: str, ref: date, force_source: bool = False) -> pd.DataFrame:
     m = map_columns(df)
     out = pd.DataFrame(index=m.index)
-    out["source"] = m["source"].fillna(source).astype(str).str.title() if "source" in m else source
+    out["source"] = source if force_source or "source" not in m else m["source"].fillna(source).astype(str).str.title()
     out["source"] = out["source"].replace({"Tripadvisor": "TripAdvisor", "Google Reviews": "Google"})
     names = m.get("restaurant", pd.Series("", index=m.index))
     branches = m.get("branch", pd.Series(None, index=m.index))
@@ -183,7 +194,8 @@ def normalise(df: pd.DataFrame, source: str, ref: date) -> pd.DataFrame:
 
 
 # ----------------------------------------------------------------------------- entry points
-def import_file(path, source: str, ref: date | None = None, batch_id: str | None = None) -> dict:
+def import_file(path, source: str, ref: date | None = None, batch_id: str | None = None,
+                force_source: bool = False) -> dict:
     """Import one file. `ref` = date the data was scraped (used for '2 months ago' style dates)."""
     path = Path(path)
     ref = ref or date.fromtimestamp(path.stat().st_mtime)
@@ -191,7 +203,7 @@ def import_file(path, source: str, ref: date | None = None, batch_id: str | None
     db.init_db()
     try:
         raw = read_file(path)
-        clean = normalise(raw, source, ref)
+        clean = normalise(raw, source, ref, force_source=force_source)
         classified = classify(clean)
         added = db.insert_reviews(classified, batch_id)
         msg = f"{clean.attrs.get('dropped', 0)} rows dropped (empty text / no date / duplicate)"
@@ -209,7 +221,7 @@ def import_folder(raw_dir: Path = RAW_DIR, ref: date | None = None) -> list[dict
         folder = Path(raw_dir) / source.lower()
         for f in sorted(folder.glob("*")):
             if f.suffix.lower() in (".csv", ".xlsx", ".xls"):
-                results.append(import_file(f, source, ref))
+                results.append(import_file(f, source_from_filename(f.name) or source, ref))
     return results
 
 

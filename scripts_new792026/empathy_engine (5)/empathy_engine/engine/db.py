@@ -1,4 +1,6 @@
 """SQLite storage: reviews, actions, reports, runs (empathy.db)."""
+import hashlib
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -71,6 +73,64 @@ def now():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _source_from_filename(file_name):
+    name = re.sub(r"[_-]+", " ", file_name.lower())
+    if "zomato" in name:
+        return "Zomato"
+    if "tripadvisor" in name or "trip advisor" in name:
+        return "TripAdvisor"
+    if "google" in name:
+        return "Google"
+    return None
+
+
+def _reconcile_legacy_sources(con):
+    runs = con.execute(
+        "SELECT batch_id, source, file_name FROM runs WHERE batch_id IS NOT NULL AND rows_added > 0"
+    ).fetchall()
+    batches = {}
+    for run in runs:
+        batches.setdefault(run["batch_id"], []).append(run)
+
+    for batch_id, batch_runs in batches.items():
+        old_sources = {run["source"] for run in batch_runs}
+        detected_sources = {_source_from_filename(run["file_name"]) for run in batch_runs}
+        detected_sources.discard(None)
+        if len(old_sources) != 1 or len(detected_sources) != 1:
+            continue
+        old_source = next(iter(old_sources))
+        new_source = next(iter(detected_sources))
+        if old_source == new_source:
+            continue
+
+        reviews = con.execute(
+            "SELECT id, restaurant, branch, review_date, text_clean FROM reviews "
+            "WHERE batch_id=? AND source=? ORDER BY id",
+            (batch_id, old_source),
+        ).fetchall()
+        updates = []
+        new_hashes = set()
+        for review in reviews:
+            review_hash = hashlib.md5(
+                f"{new_source}|{review['restaurant']}|{review['branch']}|"
+                f"{review['review_date']}|{review['text_clean']}".encode()
+            ).hexdigest()
+            collision = con.execute(
+                "SELECT 1 FROM reviews WHERE review_hash=? AND id<>? LIMIT 1",
+                (review_hash, review["id"]),
+            ).fetchone()
+            if collision or review_hash in new_hashes:
+                updates = []
+                break
+            new_hashes.add(review_hash)
+            updates.append((new_source, review_hash, review["id"]))
+
+        if not updates:
+            continue
+        con.executemany("UPDATE reviews SET source=?, review_hash=? WHERE id=?", updates)
+        con.execute("UPDATE runs SET source=? WHERE batch_id=?", (new_source, batch_id))
+
+
 @contextmanager
 def connect():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -112,6 +172,7 @@ def init_db():
             )
             if updated.rowcount:
                 con.execute("UPDATE runs SET batch_id=? WHERE id=?", (batch_id, run["id"]))
+        _reconcile_legacy_sources(con)
 
 
 def insert_reviews(df: pd.DataFrame, batch_id: str) -> int:

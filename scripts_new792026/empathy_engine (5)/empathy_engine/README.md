@@ -84,7 +84,7 @@ The importer recognises common column names on its own. A file needs a **review 
 ```bash
 python -m engine.importer --reset --scraped-on 2026-09-26
 ```
-You'll see how many rows were read and added from each file. Duplicates are skipped, so re-running is safe. Leave out `--reset` to add new files to what's already there. You can also upload files in the app (Search screen → "Add or update review files"). On Search, expand "Undo the most recent review upload" and confirm to remove reviews added by that upload and their action records. Previously imported batches are available when their import history can be matched safely.
+You'll see how many rows were read and added from each file. Duplicates are skipped, so re-running is safe. Leave out `--reset` to add new files to what's already there. You can also upload files in the app (Search screen → "Add or update review files"). Uploads auto-detect Google, Zomato or TripAdvisor from the filename; choose a platform manually when it cannot be inferred. On Search, source indicators show all-date totals for the selected restaurant. Expand "Undo the most recent review upload" and confirm to remove reviews added by that upload and their action records. Clearly named legacy batches are corrected from their filenames; ambiguous imports are left unchanged.
 
 **6. (Optional) Turn on AI replies and summaries with Groq**
 ```bash

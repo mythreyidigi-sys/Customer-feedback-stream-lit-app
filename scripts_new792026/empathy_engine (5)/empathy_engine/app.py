@@ -15,7 +15,7 @@ import streamlit as st
 from engine import analytics as an
 from engine import db
 from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD)
-from engine.importer import import_file
+from engine.importer import import_file, source_from_filename
 from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
 from engine.report import (build_report, build_servqual_pdf, load_servqual_scores, save_report,
@@ -45,6 +45,18 @@ def pill(text, cls=""):
     return f'<span class="pill {cls}">{text}</span>'
 
 
+AUTO_DETECT_SOURCE = "Auto-detect from filename"
+
+
+def resolve_upload_source(file_name, selected_source):
+    if selected_source != AUTO_DETECT_SOURCE:
+        return selected_source
+    source = source_from_filename(file_name)
+    if source:
+        return source
+    raise ValueError(f"Can't detect the source from '{file_name}'. Choose Google, Zomato, or TripAdvisor manually.")
+
+
 # ------------------------------------------------------------------ data + sidebar filters
 df_all = db.load_reviews()
 
@@ -60,16 +72,21 @@ if df_all.empty:
 
 To try the app with sample data first: `python tools/make_sample_data.py` then the import command above.
 """)
-    source = st.selectbox("Source", SOURCES)
+    source = st.selectbox("Review platform", [AUTO_DETECT_SOURCE, *SOURCES])
     ups = st.file_uploader("Review files (CSV or Excel)", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
     ref = st.date_input("Date the files were scraped (for '2 months ago' dates)", date.today())
     if ups and st.button("Import", type="primary"):
         batch_id = uuid4().hex
         for u in ups:
-            path = RAW_DIR / source.lower() / u.name
+            try:
+                upload_source = resolve_upload_source(u.name, source)
+            except ValueError as exc:
+                st.error(str(exc))
+                continue
+            path = RAW_DIR / upload_source.lower() / u.name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(u.getbuffer())
-            st.write(import_file(path, source, ref, batch_id=batch_id))
+            st.write(import_file(path, upload_source, ref, batch_id=batch_id, force_source=True))
         st.rerun()
     st.stop()
 
@@ -146,8 +163,9 @@ if page == PAGES[0]:
             c2.button("Analyse", type="primary", on_click=analyse_callback, width="stretch")
             if ss.get("search_msg"):
                 st.warning(ss.search_msg)
-        counts = cur["source"].value_counts()
-        pills = "".join(pill(f"✓ {s} · {counts.get(s, 0)}", "p-ok") if counts.get(s, 0) else pill(f"{s} · no data", "p-muted")
+        source_counts = rest_df["source"].value_counts()
+        window_counts = cur["source"].value_counts()
+        pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok") if source_counts.get(s, 0) else pill(f"{s} · no data", "p-muted")
                         for s in SOURCES)
         pills += pill("＋ YouTube · planned", "p-muted") + pill("🔒 Instagram · connect account", "p-muted")
         st.markdown(f"<div style='text-align:center'><p class='small'>Sources</p>{pills}</div>", unsafe_allow_html=True)
@@ -156,30 +174,35 @@ if page == PAGES[0]:
                     unsafe_allow_html=True)
 
     with st.container(border=True):
-        st.markdown("**Reviews collected** — selected window")
-        mx = max(1, counts.max() if len(counts) else 1)
+        st.markdown(f"**Reviews collected by source** · {ss.restaurant} · all dates")
+        mx = max(1, source_counts.max() if len(source_counts) else 1)
         for s in SOURCES:
             a, b, c = st.columns([1.2, 6, 0.8])
             a.write(s)
-            b.progress(int(counts.get(s, 0) / mx * 100))
-            c.write(f"**{counts.get(s, 0)}**")
+            b.progress(int(source_counts.get(s, 0) / mx * 100))
+            c.write(f"**{source_counts.get(s, 0)}**")
         st.button("See the overview →", on_click=go_overview)
 
     with st.expander("📥 Add or update review files (Google / Zomato / TripAdvisor)"):
         c1, c2 = st.columns(2)
-        src = c1.selectbox("Source of these files", SOURCES)
+        src = c1.selectbox("Review platform", [AUTO_DETECT_SOURCE, *SOURCES])
         ref = c2.date_input("Date the files were scraped", date.today(),
                             help="Used to convert Google's '3 weeks ago' style dates into real dates.")
         ups = st.file_uploader("CSV or Excel", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
         if ups and st.button("Import files", type="primary"):
             batch_id = uuid4().hex
             for u in ups:
-                path = RAW_DIR / src.lower() / u.name
+                try:
+                    upload_source = resolve_upload_source(u.name, src)
+                except ValueError as exc:
+                    st.error(str(exc))
+                    continue
+                path = RAW_DIR / upload_source.lower() / u.name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(u.getbuffer())
-                r = import_file(path, src, ref, batch_id=batch_id)
+                r = import_file(path, upload_source, ref, batch_id=batch_id, force_source=True)
                 (st.error if r["message"].startswith("ERROR") else st.success)(
-                    f"{u.name}: {r['added']} new of {r['read']} rows. {r['message']}")
+                    f"{u.name} ({upload_source}): {r['added']} new of {r['read']} rows. {r['message']}")
             st.button("Refresh")
         st.caption("Duplicates are skipped automatically, so re-uploading a file is safe. "
                    "If your file has an issue/cluster label column (from HDBSCAN), it is kept.")
