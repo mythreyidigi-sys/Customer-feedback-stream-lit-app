@@ -3,7 +3,32 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+import re
+from datetime import datetime, timedelta
 import pandas as pd
+
+# =========================
+# HELPER: PARSE GOOGLE'S RELATIVE REVIEW DATE
+# =========================
+def parse_relative_date(text):
+    text = text.lower().replace("edited", "").strip()
+    match = re.search(r"(a|an|\d+)\s+(day|week|month|year)s?\s+ago", text)
+    if not match:
+        return None
+
+    qty = 1 if match.group(1) in ("a", "an") else int(match.group(1))
+    unit = match.group(2)
+
+    if unit == "day":
+        delta = timedelta(days=qty)
+    elif unit == "week":
+        delta = timedelta(weeks=qty)
+    elif unit == "month":
+        delta = timedelta(days=qty * 30)
+    else:
+        delta = timedelta(days=qty * 365)
+
+    return datetime.now() - delta
 
 # =========================
 # STEP 1: SEARCH LINKS
@@ -53,6 +78,7 @@ all_data = []
 
 for place in place_links:
 
+  try:
     driver.get(place)
     time.sleep(5)
 
@@ -71,6 +97,15 @@ for place in place_links:
     except:
         pass
 
+    # Sort by Newest so the 30-day filter reflects recent reviews
+    try:
+        driver.find_element(By.XPATH, "//button[contains(@aria-label,'Sort reviews')]").click()
+        time.sleep(2)
+        driver.find_element(By.XPATH, "//div[@role='menuitemradio' and contains(.,'Newest')]").click()
+        time.sleep(3)
+    except:
+        pass
+
     # Scroll reviews
     for _ in range(12):
         try:
@@ -81,25 +116,50 @@ for place in place_links:
             pass
 
     # Extract reviews
-    review_elements = driver.find_elements(By.CSS_SELECTOR, "span.wiI7pd")
+    review_blocks = driver.find_elements(By.CSS_SELECTOR, "div.jftiEf")
 
     count = 0
+    cutoff_date = datetime.now() - timedelta(days=30)
 
-    for review in review_elements:
+    for block in review_blocks:
 
-        text = review.text
+        if count >= 50:
+            break
 
-        if text.strip() != "" and count < 50:
+        try:
+            text = block.find_element(By.CSS_SELECTOR, "span.wiI7pd").text
+        except:
+            text = ""
 
-            all_data.append({
-                "restaurant": "A2B",
-                "branch": branch_name,
-                "review": text
-            })
+        try:
+            date_text = block.find_element(By.CSS_SELECTOR, "span.rsqaWe").text
+        except:
+            date_text = ""
 
-            count += 1
+        review_date = parse_relative_date(date_text)
+
+        # reviews are sorted newest-first, so once we pass the cutoff the rest are older too
+        if review_date is not None and review_date < cutoff_date:
+            break
+
+        if text.strip() == "" or review_date is None:
+            continue
+
+        all_data.append({
+            "restaurant": "A2B",
+            "branch": branch_name,
+            "review": text,
+            "review_date": review_date.strftime("%Y-%m-%d")
+        })
+
+        count += 1
 
     print(f"Done: {branch_name}")
+
+  except Exception as e:
+    # keep already-collected data even if this branch's session/page fails
+    print(f"Skipped a branch due to error: {e}")
+    continue
 
 # =========================
 # STEP 5: SAVE CSV
@@ -111,4 +171,7 @@ df.to_csv("a2b_reviews_tamilnadu.csv", index=False, encoding="utf-8")
 print("\nSCRAPING COMPLETED!")
 print("Total reviews:", len(df))
 
-driver.quit()
+try:
+    driver.quit()
+except:
+    pass
