@@ -7,6 +7,9 @@ DATA_DIR = BASE_DIR / "data"
 RAW_DIR = DATA_DIR / "raw"            # put files in raw/google, raw/zomato, raw/tripadvisor
 REPORT_DIR = DATA_DIR / "reports"     # generated monthly PDFs
 DB_PATH = Path(os.getenv("EMPATHY_DB", DATA_DIR / "empathy.db"))
+SERVQUAL_RESPONSES_PATH = Path(os.getenv(
+    "SERVQUAL_RESPONSES_PATH", BASE_DIR.parents[2] / "Restaurant Survey (Responses)SERVQUAL.xlsx"
+))
 
 SOURCES = ["Google", "Zomato", "TripAdvisor"]
 

@@ -10,6 +10,7 @@ import hashlib
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 
@@ -182,21 +183,22 @@ def normalise(df: pd.DataFrame, source: str, ref: date) -> pd.DataFrame:
 
 
 # ----------------------------------------------------------------------------- entry points
-def import_file(path, source: str, ref: date | None = None) -> dict:
+def import_file(path, source: str, ref: date | None = None, batch_id: str | None = None) -> dict:
     """Import one file. `ref` = date the data was scraped (used for '2 months ago' style dates)."""
     path = Path(path)
     ref = ref or date.fromtimestamp(path.stat().st_mtime)
+    batch_id = batch_id or uuid4().hex
     db.init_db()
     try:
         raw = read_file(path)
         clean = normalise(raw, source, ref)
         classified = classify(clean)
-        added = db.insert_reviews(classified)
+        added = db.insert_reviews(classified, batch_id)
         msg = f"{clean.attrs.get('dropped', 0)} rows dropped (empty text / no date / duplicate)"
-        db.log_run(source, path.name, len(raw), added, msg)
+        db.log_run(source, path.name, len(raw), added, msg, batch_id)
         return {"file": path.name, "source": source, "read": len(raw), "added": added, "message": msg}
     except Exception as e:  # keep going with the other files
-        db.log_run(source, path.name, 0, 0, f"ERROR: {e}")
+        db.log_run(source, path.name, 0, 0, f"ERROR: {e}", batch_id)
         return {"file": path.name, "source": source, "read": 0, "added": 0, "message": f"ERROR: {e}"}
 
 

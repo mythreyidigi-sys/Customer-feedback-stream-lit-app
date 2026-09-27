@@ -11,6 +11,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS reviews (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     review_hash   TEXT UNIQUE,              -- de-duplication key
+    batch_id      TEXT,                      -- upload/import batch for precise undo
     source        TEXT NOT NULL,            -- Google / Zomato / TripAdvisor
     restaurant    TEXT NOT NULL,            -- cleaned chain name
     branch        TEXT,                     -- cleaned branch / locality
@@ -53,13 +54,15 @@ CREATE TABLE IF NOT EXISTS reports (
 
 CREATE TABLE IF NOT EXISTS runs (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id      TEXT,
     started_at    TEXT,
     source        TEXT,
     file_name     TEXT,
     rows_read     INTEGER,
     rows_added    INTEGER,
     rows_skipped  INTEGER,
-    message       TEXT
+    message       TEXT,
+    undone_at     TEXT
 );
 """
 
@@ -83,30 +86,79 @@ def connect():
 def init_db():
     with connect() as con:
         con.executescript(SCHEMA)
+        for table, column, definition in (
+            ("reviews", "batch_id", "TEXT"),
+            ("runs", "batch_id", "TEXT"),
+            ("runs", "undone_at", "TEXT"),
+        ):
+            columns = {row["name"] for row in con.execute(f"PRAGMA table_info({table})")}
+            if column not in columns:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+        legacy_runs = con.execute(
+            "SELECT id, started_at, source FROM runs WHERE batch_id IS NULL AND rows_added > 0 ORDER BY id"
+        ).fetchall()
+        for run in legacy_runs:
+            matches = con.execute(
+                "SELECT COUNT(*) FROM runs WHERE source=? AND started_at=? AND rows_added > 0",
+                (run["source"], run["started_at"]),
+            ).fetchone()[0]
+            if matches != 1:
+                continue
+            batch_id = f"legacy-{run['id']}"
+            updated = con.execute(
+                "UPDATE reviews SET batch_id=? WHERE source=? AND imported_at=? AND batch_id IS NULL",
+                (batch_id, run["source"], run["started_at"]),
+            )
+            if updated.rowcount:
+                con.execute("UPDATE runs SET batch_id=? WHERE id=?", (batch_id, run["id"]))
 
 
-def insert_reviews(df: pd.DataFrame) -> int:
+def insert_reviews(df: pd.DataFrame, batch_id: str) -> int:
     """Insert classified reviews; duplicates (same review_hash) are skipped. Returns rows added."""
     cols = ["review_hash", "source", "restaurant", "branch", "review_date", "rating", "text", "text_clean",
             "issue", "issue_source", "sentiment", "emotion", "urgency", "red_flag"]
-    rows = [tuple(None if pd.isna(v) else v for v in r) + (now(),) for r in df[cols].itertuples(index=False)]
+    rows = [tuple(None if pd.isna(v) else v for v in r) + (batch_id, now())
+            for r in df[cols].itertuples(index=False)]
     with connect() as con:
         before = con.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]
         con.executemany(
-            f"INSERT OR IGNORE INTO reviews ({','.join(cols)}, imported_at) VALUES ({','.join('?' * (len(cols) + 1))})",
+            f"INSERT OR IGNORE INTO reviews ({','.join(cols)}, batch_id, imported_at) "
+            f"VALUES ({','.join('?' * (len(cols) + 2))})",
             rows,
         )
         after = con.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]
     return after - before
 
 
-def log_run(source, file_name, read, added, message=""):
+def log_run(source, file_name, read, added, message="", batch_id=None):
     with connect() as con:
         con.execute(
-            "INSERT INTO runs (started_at, source, file_name, rows_read, rows_added, rows_skipped, message) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (now(), source, file_name, read, added, read - added, message),
+            "INSERT INTO runs (batch_id, started_at, source, file_name, rows_read, rows_added, rows_skipped, message) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (batch_id, now(), source, file_name, read, added, read - added, message),
         )
+
+
+def latest_import_batch():
+    with connect() as con:
+        return con.execute(
+            """SELECT batch_id, SUM(rows_added) AS rows_added, GROUP_CONCAT(file_name, ', ') AS file_names
+               FROM runs WHERE batch_id IS NOT NULL AND undone_at IS NULL
+               GROUP BY batch_id
+               HAVING SUM(rows_added) > 0 AND EXISTS (
+                   SELECT 1 FROM reviews WHERE reviews.batch_id = runs.batch_id
+               )
+               ORDER BY MAX(id) DESC LIMIT 1"""
+        ).fetchone()
+
+
+def undo_import_batch(batch_id: str) -> int:
+    with connect() as con:
+        con.execute("DELETE FROM actions WHERE review_id IN (SELECT id FROM reviews WHERE batch_id=?)", (batch_id,))
+        deleted = con.execute("DELETE FROM reviews WHERE batch_id=?", (batch_id,)).rowcount
+        con.execute("UPDATE runs SET undone_at=? WHERE batch_id=? AND undone_at IS NULL", (now(), batch_id))
+    return deleted
 
 
 def load_reviews() -> pd.DataFrame:

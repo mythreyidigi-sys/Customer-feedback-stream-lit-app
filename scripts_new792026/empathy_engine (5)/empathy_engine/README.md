@@ -84,7 +84,7 @@ The importer recognises common column names on its own. A file needs a **review 
 ```bash
 python -m engine.importer --reset --scraped-on 2026-09-26
 ```
-You'll see how many rows were read and added from each file. Duplicates are skipped, so re-running is safe. Leave out `--reset` to add new files to what's already there. You can also upload files in the app (Search screen → "Add or update review files").
+You'll see how many rows were read and added from each file. Duplicates are skipped, so re-running is safe. Leave out `--reset` to add new files to what's already there. You can also upload files in the app (Search screen → "Add or update review files"). On Search, expand "Undo the most recent review upload" and confirm to remove reviews added by that upload and their action records. Previously imported batches are available when their import history can be matched safely.
 
 **6. (Optional) Turn on AI replies and summaries with Groq**
 ```bash
@@ -102,14 +102,16 @@ python tools/discover_issues.py               # write the labels into empathy.db
 
 **8. Run the app:** `streamlit run app.py`
 
-## The four screens
+## The six screens
 
 | Screen | What it shows |
 |---|---|
-| 1. Search | Type a restaurant (fuzzy match), see review counts per source for the window, upload new files, check data coverage |
-| 2. Overview | Spike alerts, KPIs (reviews, reputation score, negative share, open escalations), weekly sentiment, 6-month score trend, top issues vs the previous period, **Top-5 decision panel** (priority, action, owner, expected improvement), competitors, emotions, branch table, review search and CSV export |
+| 1. Search | Default frontend. Find a restaurant, see review counts per source, upload files, undo the latest upload, and check data coverage |
+| 2. Overview | Spike alerts, KPIs (reviews, reputation score, negative share, open escalations), weekly sentiment, 6-month score trend, top issues vs the previous period, **Top-5 decision panel** (priority, action, owner, expected improvement), competitors, branch table, review search and CSV export |
 | 3. Action center | Escalated reviews ranked by urgency, with the recommended fix, an editable drafted reply, Approve / AI draft / Assign / Resolve. Everything is saved to the `actions` table |
-| 4. Monthly report | Summary, top 3 actions for next month, reply rate, reply time, escalations resolved, issue comparison, branches, and a **PDF download** |
+| 4. Monthly report | Summary, top 3 actions for next month, reply rate, reply time, escalations resolved, issue comparison, branches, and a **PDF download**. The SERVQUAL Survey button uses the real response workbook at the repository root, displays expectation/perception and gap charts, and enables a separate downloadable PDF with review-theme counts for the selected survey restaurant and report month. If the current restaurant has no survey responses, choose a supported restaurant from the workbook |
+| 5. Emotion analysis | Emotion volume and sentiment breakdown for the selected restaurant and date window, with review filtering and CSV export |
+| 6. Root cause analysis | Issue-category by emotion cross-tab, percentage heatmap, dominant-emotion summary and CSV export. This is descriptive association, not causal proof |
 
 Sidebar filters: restaurant, branches, sources, window (7–180 days), "as of" date and competitors to compare with.
 

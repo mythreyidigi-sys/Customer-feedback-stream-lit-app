@@ -5,6 +5,7 @@ Screens: 1. Search   2. Overview   3. Action center   4. Monthly report
 import difflib
 from datetime import date, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 import plotly.express as px
@@ -17,14 +18,16 @@ from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEA
 from engine.importer import import_file
 from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
-from engine.report import build_report, save_report
+from engine.report import (build_report, build_servqual_pdf, load_servqual_scores, save_report,
+                           servqual_restaurants, servqual_review_frequency)
 
 st.set_page_config(page_title="Empathy Engine", page_icon="💬", layout="wide")
 db.init_db()
 
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
-PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Action center", "📄 4. Monthly report"]
+PAGES = ["🔍 Search", "📊 Overview", "🚨 Action center", "📄 Monthly report",
+         "💛 Emotion analysis", "🧩 Root cause analysis"]
 
 st.markdown("""
 <style>
@@ -61,11 +64,12 @@ To try the app with sample data first: `python tools/make_sample_data.py` then t
     ups = st.file_uploader("Review files (CSV or Excel)", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
     ref = st.date_input("Date the files were scraped (for '2 months ago' dates)", date.today())
     if ups and st.button("Import", type="primary"):
+        batch_id = uuid4().hex
         for u in ups:
             path = RAW_DIR / source.lower() / u.name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(u.getbuffer())
-            st.write(import_file(path, source, ref))
+            st.write(import_file(path, source, ref, batch_id=batch_id))
         st.rerun()
     st.stop()
 
@@ -168,11 +172,12 @@ if page == PAGES[0]:
                             help="Used to convert Google's '3 weeks ago' style dates into real dates.")
         ups = st.file_uploader("CSV or Excel", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
         if ups and st.button("Import files", type="primary"):
+            batch_id = uuid4().hex
             for u in ups:
                 path = RAW_DIR / src.lower() / u.name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(u.getbuffer())
-                r = import_file(path, src, ref)
+                r = import_file(path, src, ref, batch_id=batch_id)
                 (st.error if r["message"].startswith("ERROR") else st.success)(
                     f"{u.name}: {r['added']} new of {r['read']} rows. {r['message']}")
             st.button("Refresh")
@@ -182,6 +187,26 @@ if page == PAGES[0]:
         if len(runs):
             st.dataframe(runs[["started_at", "source", "file_name", "rows_read", "rows_added", "message"]],
                          hide_index=True, width="stretch")
+
+    latest_batch = db.latest_import_batch()
+    if latest_batch:
+        with st.expander("↩ Undo the most recent review upload"):
+            st.caption(f"{latest_batch['rows_added']} reviews from {latest_batch['file_names']}. "
+                       "Undo removes only reviews added by this upload and their action records.")
+            confirm_key = f"confirm_undo_{latest_batch['batch_id']}"
+            if st.button("Undo latest upload", key="undo_latest_upload"):
+                ss[confirm_key] = True
+            if ss.get(confirm_key):
+                st.warning("This cannot be reversed. Confirm removing this upload?")
+                undo_col, cancel_col = st.columns(2)
+                if undo_col.button("Confirm undo", type="primary", key="confirm_undo_button"):
+                    removed = db.undo_import_batch(latest_batch["batch_id"])
+                    ss.pop(confirm_key, None)
+                    st.toast(f"Removed {removed} reviews from the latest upload.")
+                    st.rerun()
+                if cancel_col.button("Keep reviews", key="cancel_undo_button"):
+                    ss.pop(confirm_key, None)
+                    st.rerun()
 
     with st.expander("🗂️ Data coverage — all restaurants"):
         cov = df_all.pivot_table(index="restaurant", columns="source", values="id", aggfunc="count", fill_value=0)
@@ -417,7 +442,151 @@ elif page == PAGES[3]:
         st.markdown("**Branches**")
         st.dataframe(rep["branches"], hide_index=True, width="stretch", height=340)
 
+    servqual_key = f"servqual_{ss.restaurant}_{month}"
+    servqual_picker_key = f"show_servqual_picker_{ss.restaurant}_{month}"
+    with st.container(border=True):
+        servqual_col, _ = st.columns([1, 3])
+        if servqual_col.button("SERVQUAL Survey", key=f"servqual_button_{month}"):
+            try:
+                available_surveys = servqual_restaurants()
+                ss[servqual_picker_key] = True
+                if ss.restaurant in available_surveys:
+                    survey_restaurant = ss.restaurant
+                else:
+                    survey_restaurant = None
+                if survey_restaurant:
+                    scores = load_servqual_scores(survey_restaurant)
+                    period = pd.Period(month, freq="M")
+                    survey_reviews = an.filter_reviews(
+                        df_all, survey_restaurant, sources=sources,
+                        start=period.start_time, end=period.end_time.normalize(),
+                    )
+                    frequency = servqual_review_frequency(survey_reviews)
+                    pdf = build_servqual_pdf(scores, frequency, survey_restaurant, month)
+                    ss[f"servqual_{survey_restaurant}_{month}"] = (scores, frequency, pdf)
+                    ss[servqual_picker_key] = False
+            except (FileNotFoundError, ValueError) as exc:
+                st.error(str(exc))
+
+        if ss.get(servqual_picker_key):
+            try:
+                available_surveys = servqual_restaurants()
+                default_index = available_surveys.index(ss.restaurant) if ss.restaurant in available_surveys else 0
+                survey_restaurant = st.selectbox("Survey restaurant", available_surveys, index=default_index,
+                                                 key=f"servqual_restaurant_{month}")
+                if survey_restaurant != ss.restaurant:
+                    st.caption(f"No survey responses for {ss.restaurant}; showing {survey_restaurant} survey results instead.")
+                if st.button("Generate SERVQUAL charts and report", key=f"servqual_generate_{month}"):
+                    scores = load_servqual_scores(survey_restaurant)
+                    period = pd.Period(month, freq="M")
+                    survey_reviews = an.filter_reviews(
+                        df_all, survey_restaurant, sources=sources,
+                        start=period.start_time, end=period.end_time.normalize(),
+                    )
+                    frequency = servqual_review_frequency(survey_reviews)
+                    pdf = build_servqual_pdf(scores, frequency, survey_restaurant, month)
+                    ss[f"servqual_{survey_restaurant}_{month}"] = (scores, frequency, pdf)
+                    st.rerun()
+            except (FileNotFoundError, ValueError) as exc:
+                st.error(str(exc))
+
+        selected_servqual_restaurant = ss.get(f"servqual_restaurant_{month}", ss.restaurant)
+        active_servqual_key = f"servqual_{selected_servqual_restaurant}_{month}"
+        if active_servqual_key not in ss:
+            active_servqual_key = None
+        if active_servqual_key:
+            scores, frequency, servqual_pdf = ss[active_servqual_key]
+            servqual_restaurant = active_servqual_key.removeprefix("servqual_").removesuffix(f"_{month}")
+            st.markdown(f"**{servqual_restaurant} SERVQUAL dimension scores**")
+            survey_meta = scores.iloc[0]
+            st.caption(f"{int(survey_meta['respondents'])} survey respondents · "
+                       f"survey dates {survey_meta['survey_start']}–{survey_meta['survey_end']}. "
+                       "Review-theme counts use the selected restaurant and report month.")
+            sorted_scores = scores.sort_values("mean_gap")
+            servqual_left, servqual_right = st.columns(2)
+            with servqual_left:
+                fig = px.bar(sorted_scores, x="dimension", y=["mean_expectation", "mean_perception"],
+                             barmode="group", labels={"value": "Score (1–7)", "variable": "Response"},
+                             color_discrete_sequence=[GREY, ACCENT])
+                fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0), legend_title=None,
+                                  yaxis=dict(range=[0, 7]))
+                st.plotly_chart(fig, width="stretch")
+            with servqual_right:
+                fig = px.bar(sorted_scores, x="mean_gap", y="dimension", orientation="h",
+                             color="mean_gap", color_continuous_scale="RdYlGn",
+                             labels={"mean_gap": "Perception − expectation"})
+                fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0), coloraxis_showscale=False)
+                st.plotly_chart(fig, width="stretch")
+            st.dataframe(frequency, hide_index=True, width="stretch")
+            st.download_button("Download SERVQUAL report (PDF)", servqual_pdf,
+                               f"{servqual_restaurant.replace(' ', '_')}_{month}_servqual.pdf", "application/pdf",
+                               key=f"servqual_download_{month}")
+
     with st.expander("Previously generated reports"):
         with db.connect() as con:
             past = pd.read_sql_query("SELECT restaurant, month, created_at, pdf_path FROM reports ORDER BY month DESC", con)
         st.dataframe(past, hide_index=True, width="stretch")
+
+# ================================================================== 5. EMOTION ANALYSIS
+elif page == PAGES[4]:
+    st.subheader("Emotion analysis")
+    st.caption(f"Customer emotions for {ss.restaurant} · last {days} days")
+    if cur.empty:
+        st.info("No reviews in this window. Widen the window or change filters in the sidebar.")
+    else:
+        emotion_counts = cur["emotion"].value_counts().rename_axis("emotion").reset_index(name="reviews")
+        emotion_sentiment = cur.groupby(["emotion", "sentiment"]).size().rename("reviews").reset_index()
+        emotion_colours = {"anger": RED, "frustration": AMBER, "disappointment": "#D4537E",
+                           "neutral": GREY, "delight": GREEN}
+        emotion_left, emotion_right = st.columns(2)
+        with emotion_left:
+            st.markdown("**Emotion volume**")
+            fig = px.bar(emotion_counts, x="emotion", y="reviews", color="emotion",
+                         color_discrete_map=emotion_colours)
+            fig.update_layout(height=330, showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
+            st.plotly_chart(fig, width="stretch")
+        with emotion_right:
+            st.markdown("**Sentiment within each emotion**")
+            fig = px.bar(emotion_sentiment, x="emotion", y="reviews", color="sentiment",
+                         color_discrete_map=SENT_COLORS, barmode="stack")
+            fig.update_layout(height=330, margin=dict(l=0, r=0, t=10, b=0), legend_title=None)
+            st.plotly_chart(fig, width="stretch")
+        chosen_emotion = st.selectbox("Review emotion", emotion_counts["emotion"].tolist())
+        emotion_reviews = cur[cur["emotion"] == chosen_emotion]
+        st.dataframe(emotion_reviews[["review_date", "source", "branch", "rating", "issue", "sentiment", "text"]]
+                     .sort_values("review_date", ascending=False), hide_index=True, width="stretch")
+        st.download_button("Download emotion-filtered reviews", emotion_reviews.to_csv(index=False).encode(),
+                           f"{ss.restaurant}_{chosen_emotion}_reviews.csv", "text/csv")
+
+# ================================================================== 6. ROOT CAUSE ANALYSIS
+elif page == PAGES[5]:
+    st.subheader("Root cause analysis")
+    st.caption("Issue category × customer emotion association for the uploaded reviews; this is descriptive, not causal proof.")
+    root_reviews = cur.dropna(subset=["issue", "emotion"])
+    if root_reviews.empty:
+        st.info("No classified reviews in this window. Widen the window or change filters in the sidebar.")
+    else:
+        issue_totals = root_reviews["issue"].value_counts()
+        selected_issues = issue_totals.head(12).index
+        root_reviews = root_reviews[root_reviews["issue"].isin(selected_issues)]
+        counts = pd.crosstab(root_reviews["issue"], root_reviews["emotion"])
+        row_pct = counts.div(counts.sum(axis=1), axis=0).mul(100)
+        root_left, root_right = st.columns([3, 2])
+        with root_left:
+            st.markdown("**Emotion mix by issue (%)**")
+            fig = px.imshow(row_pct, labels={"x": "Emotion", "y": "Issue", "color": "Share (%)"},
+                            text_auto=".0f", aspect="auto", color_continuous_scale="YlOrRd",
+                            zmin=0, zmax=100)
+            fig.update_layout(height=max(360, 36 * len(row_pct)), margin=dict(l=0, r=0, t=10, b=0))
+            st.plotly_chart(fig, width="stretch")
+        with root_right:
+            st.markdown("**Dominant emotion by issue**")
+            summary = pd.DataFrame({
+                "issue": row_pct.index,
+                "reviews": counts.sum(axis=1).values,
+                "dominant_emotion": row_pct.idxmax(axis=1).values,
+                "share_pct": row_pct.max(axis=1).round(1).values,
+            }).sort_values("reviews", ascending=False)
+            st.dataframe(summary, hide_index=True, width="stretch")
+        st.download_button("Download issue-emotion table", counts.to_csv().encode(),
+                           f"{ss.restaurant}_issue_emotion.csv", "text/csv")
