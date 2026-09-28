@@ -19,6 +19,7 @@ Pipeline (final dataset: 6 chains x 3 platforms = 18 combinations):
            4. Location & ambience   Module 5 - branch-level location & ambience intelligence
            5. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
            6. Monthly report    PDF summary for managers
+           7. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
 
 Setup:
     pip install -r requirements.txt
@@ -64,7 +65,7 @@ db.init_db()
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
 PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Early warning", "📍 4. Location & ambience",
-         "📣 5. Campaigns", "📄 6. Monthly report"]
+         "📣 5. Campaigns", "📄 6. Monthly report", "🧭 7. SERVQUAL"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -139,16 +140,13 @@ def pill(text, cls=""):
     return f'<span class="pill {cls}">{text}</span>'
 
 
-AUTO_DETECT_SOURCE = "Auto-detect from filename"
-
-
-def resolve_upload_source(file_name, selected_source):
-    if selected_source != AUTO_DETECT_SOURCE:
-        return selected_source
+def resolve_upload_source(file_name):
     source = source_from_filename(file_name)
     if source:
         return source
-    raise ValueError(f"Can't detect the source from '{file_name}'. Choose Google, Zomato, or TripAdvisor manually.")
+    raise ValueError(
+        f"Can't detect the review platform from '{file_name}'. Include Google, Zomato, or TripAdvisor in the filename."
+    )
 
 
 def render_upload_analyse_form(key_prefix):
@@ -156,33 +154,60 @@ def render_upload_analyse_form(key_prefix):
     if notice:
         st.success(notice)
 
-    st.markdown("### Upload reviews")
-    platform_col, date_col, file_col = st.columns([1.2, 1, 2.5])
-    selected_source = platform_col.selectbox(
-        "Review platform", [AUTO_DETECT_SOURCE, *SOURCES], key=f"{key_prefix}_platform"
-    )
-    scraped_on = date_col.date_input(
-        "Date scraped", date.today(), key=f"{key_prefix}_scraped_on",
-        help="Used to convert relative review dates such as '3 weeks ago'.",
-    )
-    uploaded_files = file_col.file_uploader(
-        "Review files", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
+    uploaded_files = st.file_uploader(
+        "Drop files here, or click to browse", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
         key=f"{key_prefix}_files",
     )
+    st.caption("CSV, XLSX or XLS · up to 200 MB each · add several at once · relative dates use today")
 
-    if st.button("Analyse", type="primary", key=f"{key_prefix}_analyse", disabled=not uploaded_files):
+    undo_key = f"{key_prefix}_undo_batch"
+    latest_batch = db.latest_import_batch()
+    analyse_col, undo_col = st.columns([1, 1])
+    analyse_clicked = analyse_col.button(
+        "Analyse", type="primary", key=f"{key_prefix}_analyse", disabled=not uploaded_files
+    )
+    undo_clicked = undo_col.button(
+        "↶ Undo last upload", key=f"{key_prefix}_undo", disabled=latest_batch is None,
+        help="Reverse the latest imported batch of review documents.",
+    )
+
+    if undo_clicked and latest_batch is not None:
+        st.session_state[undo_key] = latest_batch["batch_id"]
+        st.rerun()
+
+    pending_batch = st.session_state.get(undo_key)
+    if pending_batch:
+        latest_batch = db.latest_import_batch()
+        if latest_batch is None or latest_batch["batch_id"] != pending_batch:
+            st.session_state.pop(undo_key, None)
+        else:
+            st.warning(
+                f"Undo this upload? This will remove {latest_batch['rows_added']:,} imported reviews "
+                f"from {latest_batch['file_names']}. The original file remains in the raw archive."
+            )
+            confirm_col, cancel_col = st.columns(2)
+            if confirm_col.button("Confirm undo", key=f"{key_prefix}_confirm_undo", type="primary"):
+                removed = db.undo_import_batch(pending_batch)
+                st.session_state.pop(undo_key, None)
+                st.session_state["upload_notice"] = f"Undid the latest upload and removed {removed:,} review(s)."
+                st.rerun()
+            if cancel_col.button("Keep upload", key=f"{key_prefix}_cancel_undo"):
+                st.session_state.pop(undo_key, None)
+                st.rerun()
+
+    if analyse_clicked:
         batch_id = uuid4().hex
         imported_files, added_reviews, errors = 0, 0, []
         for uploaded_file in uploaded_files:
             try:
-                upload_source = resolve_upload_source(uploaded_file.name, selected_source)
+                upload_source = resolve_upload_source(uploaded_file.name)
             except ValueError as exc:
                 errors.append(str(exc))
                 continue
             path = RAW_DIR / upload_source.lower() / uploaded_file.name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(uploaded_file.getbuffer())
-            result = import_file(path, upload_source, scraped_on, batch_id=batch_id, force_source=True)
+            result = import_file(path, upload_source, date.today(), batch_id=batch_id, force_source=True)
             if result["message"].startswith("ERROR"):
                 errors.append(f"{uploaded_file.name}: {result['message']}")
             else:
@@ -244,6 +269,52 @@ def weekly_counts(df: pd.DataFrame, as_of, weeks=5) -> list:
 def aspect_flags(df: pd.DataFrame) -> pd.DataFrame:
     text = df["text"].fillna("").str.lower()
     return pd.DataFrame({a: text.str.contains(rx, regex=True) for a, rx in ASPECTS.items()}, index=df.index)
+
+
+@st.cache_data
+def load_servqual_scores(path: str) -> tuple[pd.DataFrame, int]:
+    responses = pd.read_excel(path)
+    dimensions = ["Reliability", "Responsiveness", "Assurance", "Empathy", "Tangibles"]
+    rows = []
+    respondent_masks = []
+
+    for dimension in dimensions:
+        prefix = f"{dimension}|"
+        item_ids = {
+            column[len(prefix):-2]
+            for column in responses.columns
+            if column.startswith(prefix) and column.endswith(("|E", "|P"))
+        }
+        expectation_columns, perception_columns = [], []
+        for item_id in sorted(item_ids):
+            expectation_column = f"{prefix}{item_id}|E"
+            perception_column = f"{prefix}{item_id}|P"
+            if expectation_column in responses and perception_column in responses:
+                expectation_columns.append(expectation_column)
+                perception_columns.append(perception_column)
+
+        if expectation_columns:
+            expectation = responses[expectation_columns].apply(pd.to_numeric, errors="coerce")
+            perception = responses[perception_columns].apply(pd.to_numeric, errors="coerce")
+            expectation.columns = range(len(expectation_columns))
+            perception.columns = range(len(perception_columns))
+            valid_pairs = expectation.notna() & perception.notna()
+            respondent_masks.append(valid_pairs.any(axis=1))
+            rows.append({
+                "dimension": dimension,
+                "mean_expectation": expectation.where(valid_pairs).stack().mean(),
+                "mean_perception": perception.where(valid_pairs).stack().mean(),
+                "mean_gap": (perception - expectation).where(valid_pairs).stack().mean(),
+                "n_items": len(expectation_columns),
+                "respondents": int(valid_pairs.any(axis=1).sum()),
+            })
+        else:
+            rows.append({"dimension": dimension, "mean_expectation": None,
+                         "mean_perception": None, "mean_gap": None, "n_items": 0,
+                         "respondents": 0})
+
+    respondent_count = int(pd.concat(respondent_masks, axis=1).any(axis=1).sum()) if respondent_masks else 0
+    return pd.DataFrame(rows), respondent_count
 
 
 # ------------------------------------------------------------------ data + sidebar filters
@@ -309,7 +380,10 @@ def go_overview():
 # ================================================================== 1. SEARCH
 if page == PAGES[0]:
     with st.container(border=True):
-        st.markdown("## Upload and analyse customer reviews")
+        st.caption("GETTING STARTED")
+        st.markdown("## Add a batch of reviews")
+        st.markdown("Upload review exports from Google, Zomato or TripAdvisor. We score customer sentiment and "
+                    "group reviews into recurring themes.")
         render_upload_analyse_form("search")
         source_counts = rest_df["source"].value_counts()
         pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok") if source_counts.get(s, 0)
@@ -418,9 +492,12 @@ elif page == PAGES[1]:
         dist.columns = ["issue", "reviews"]
         noise_n = int(is_noise(cur["issue"]).sum())
         if len(dist):
-            fig = px.treemap(dist, path=["issue"], values="reviews", color="reviews",
-                             color_continuous_scale=["#E1F5EE", ACCENT])
-            fig.update_layout(height=300, margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
+            dist = dist.sort_values("reviews", ascending=True)
+            fig = px.bar(dist, x="reviews", y="issue", orientation="h", color="reviews",
+                         color_continuous_scale=["#E1F5EE", ACCENT], text="reviews")
+            fig.update_traces(textposition="outside", cliponaxis=False)
+            fig.update_layout(height=max(300, 34 * len(dist) + 50), margin=dict(l=0, r=18, t=10, b=0),
+                              coloraxis_showscale=False, xaxis_title="Reviews", yaxis_title=None)
             st.plotly_chart(fig, width="stretch")
         st.caption(f"{len(dist)} categories · {noise_n} reviews flagged as noise in this window")
 
@@ -790,3 +867,105 @@ elif page == PAGES[5]:
         with db.connect() as con:
             past = pd.read_sql_query("SELECT restaurant, month, created_at, pdf_path FROM reports ORDER BY month DESC", con)
         st.dataframe(past, hide_index=True, width="stretch")
+
+# ================================================================== 7. SERVQUAL
+elif page == PAGES[6]:
+    st.markdown("**SERVQUAL · customer expectations versus perceived service**  \n"
+                "<span class='small'>A negative gap means perceived service fell short of expectations. "
+                "NLP complaint counts use the current restaurant, source and date filters.</span>",
+                unsafe_allow_html=True)
+
+    survey_path = _HERE / "outputs" / "cleaned_servqual_responses.xlsx"
+    if not survey_path.is_file():
+        st.warning(f"Survey response workbook not found: {survey_path}")
+    else:
+        servqual, survey_respondents = load_servqual_scores(str(survey_path))
+        scored = servqual.dropna(subset=["mean_gap"])
+        worst = scored.loc[scored["mean_gap"].idxmin()] if not scored.empty else None
+        item_count = int(servqual["n_items"].sum())
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Survey respondents", survey_respondents, border=True)
+        k2.metric("Worst service gap" if worst is None else f"Worst gap · {worst['dimension']}",
+                  "—" if worst is None else f"{worst['mean_gap']:+.2f}", border=True)
+        k3.metric("Survey items represented", f"{item_count} / 20", border=True)
+        k4.metric("Classified reviews", f"{int((~is_noise(cur['issue'])).sum()):,}",
+                  f"Last {days} days", border=True)
+
+        chart_col, gap_col = st.columns(2)
+        with chart_col.container(border=True):
+            st.markdown("**Expectation and perception** · 1–7 scale")
+            comparison = servqual.melt(
+                id_vars="dimension",
+                value_vars=["mean_expectation", "mean_perception"],
+                var_name="measure",
+                value_name="score",
+            ).dropna(subset=["score"])
+            if comparison.empty:
+                st.info("No paired expectation/perception responses are available.")
+            else:
+                comparison["measure"] = comparison["measure"].map({
+                    "mean_expectation": "Expectation", "mean_perception": "Perception"
+                })
+                fig = px.bar(comparison, x="dimension", y="score", color="measure", barmode="group",
+                             color_discrete_map={"Expectation": GREY, "Perception": ACCENT},
+                             category_orders={"dimension": servqual["dimension"].tolist()})
+                fig.update_layout(height=330, margin=dict(l=0, r=0, t=10, b=0),
+                                  yaxis=dict(range=[0, 7]), xaxis_title=None, yaxis_title="Mean score",
+                                  legend_title=None, legend=dict(orientation="h", y=-0.2))
+                st.plotly_chart(fig, width="stretch")
+
+        with gap_col.container(border=True):
+            st.markdown("**Service-quality gap** · perception − expectation")
+            if scored.empty:
+                st.info("No scored SERVQUAL dimensions are available.")
+            else:
+                gap_chart = scored.sort_values("mean_gap").copy()
+                gap_chart["status"] = gap_chart["mean_gap"].map(
+                    lambda gap: "Shortfall" if gap < 0 else "Meets expectations"
+                )
+                fig = px.bar(gap_chart, x="mean_gap", y="dimension", orientation="h", color="status",
+                             color_discrete_map={"Shortfall": RED, "Meets expectations": GREEN})
+                fig.update_layout(height=330, margin=dict(l=0, r=0, t=10, b=0),
+                                  xaxis_title="Mean gap", yaxis_title=None, legend_title=None,
+                                  legend=dict(orientation="h", y=-0.2))
+                fig.add_vline(x=0, line_color=GREY, line_width=1)
+                st.plotly_chart(fig, width="stretch")
+
+        issue_categories = {
+            "Reliability": ["Food Quantity & Value for Money", "Billing & Online Ordering Issues"],
+            "Responsiveness": ["Slow Service & Staff Negligence", "Food Variety & Fast Service"],
+            "Assurance": ["Poor Experience & Food Hygiene Complaints"],
+            "Empathy": ["Staff Courtesy & Behaviour", "Service Quality"],
+            "Tangibles": ["Cleanliness & Restroom Hygiene", "Ambience & Seating"],
+        }
+        issue_counts = cur["issue"].dropna().astype(str).str.casefold().value_counts()
+        triangulation = servqual[["dimension", "mean_gap", "n_items", "respondents"]].copy()
+        triangulation["matched_issue_categories"] = triangulation["dimension"].map(
+            lambda dimension: ", ".join(issue_categories[dimension])
+        )
+        triangulation["matched_nlp_frequency"] = triangulation["dimension"].map(
+            lambda dimension: sum(issue_counts.get(category.casefold(), 0)
+                                  for category in issue_categories[dimension])
+        )
+        with st.container(border=True):
+            st.markdown("**SERVQUAL and review triangulation**")
+            st.dataframe(
+                triangulation[["dimension", "mean_gap", "n_items", "respondents",
+                               "matched_nlp_frequency", "matched_issue_categories"]],
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "mean_gap": st.column_config.NumberColumn("Mean gap", format="%+.2f"),
+                    "n_items": "Survey items",
+                    "respondents": "Respondents",
+                    "matched_nlp_frequency": "NLP mentions",
+                    "matched_issue_categories": "Matched review themes",
+                },
+            )
+            st.caption(
+                f"Survey scores use all {survey_respondents:,} available submissions in "
+                "outputs/cleaned_servqual_responses.xlsx; they are not filtered by restaurant. "
+                "NLP mentions reflect the selected restaurant and current dashboard filters. "
+                "Dimensions without mapped survey items remain unscored."
+            )
