@@ -13,13 +13,12 @@ Pipeline (final dataset: 6 chains x 3 platforms = 18 combinations):
       -> Groq LLM cluster labels (issue), plus emotion / urgency classifier
       -> SQLite (empathy.db: reviews, actions, reports, runs)
       -> Streamlit app:
-           1. Search            data coverage by chain and platform
+           1. Search            upload and import review files
            2. Overview          KPIs, top issues, priority decision panel
            3. Early warning     Module 6 - reputation early-warning & resolution
-           4. Location & ambience   Module 5 - branch-level location & ambience intelligence
-           5. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
-           6. Monthly report    PDF summary for managers
-           7. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
+           4. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
+           5. Monthly report    PDF summary for managers
+           6. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
 
 Setup:
     pip install -r requirements.txt
@@ -64,16 +63,12 @@ db.init_db()
 
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
-PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Early warning", "📍 4. Location & ambience",
-         "📣 5. Campaigns", "📄 6. Monthly report", "🧭 7. SERVQUAL"]
+PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Early warning", "📣 4. Campaigns",
+         "📄 5. Monthly report", "🧭 6. SERVQUAL"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
 # numbers in the app always come from the database).
-PROJECT_REF = {"raw": 6609, "clean": 6159, "classified": 5909, "categories": 10,
-               "chains": 6, "platforms": 3, "branches": 108}
-EXPECTED_CHAINS = ["A2B", "Sangeetha", "Saravana Bhavan", "Sree Annapoorna",
-                   "Namma Veedu Vasantha Bhavan", "Geetham"]
 NOISE_LABELS = {"noise", "unclassified", "uncategorized", "uncategorised", "outlier", "-1", "other", ""}
 
 # ------------------------------------------------------------------ Module 5 aspects
@@ -140,13 +135,8 @@ def pill(text, cls=""):
     return f'<span class="pill {cls}">{text}</span>'
 
 
-def resolve_upload_source(file_name):
-    source = source_from_filename(file_name)
-    if source:
-        return source
-    raise ValueError(
-        f"Can't detect the review platform from '{file_name}'. Include Google, Zomato, or TripAdvisor in the filename."
-    )
+def resolve_upload_source(file_name, fallback_source):
+    return source_from_filename(file_name) or fallback_source
 
 
 def render_upload_analyse_form(key_prefix):
@@ -159,6 +149,15 @@ def render_upload_analyse_form(key_prefix):
         key=f"{key_prefix}_files",
     )
     st.caption("CSV, XLSX or XLS · up to 200 MB each · add several at once · relative dates use today")
+    fallback_source = "Other"
+    if uploaded_files and any(source_from_filename(file.name) is None for file in uploaded_files):
+        source_choice = st.selectbox(
+            "Platform for files without one in the filename", ["Other", *SOURCES], key=f"{key_prefix}_source"
+        )
+        fallback_source = source_choice
+        if source_choice == "Other":
+            fallback_source = st.text_input("Platform name", value="Other", key=f"{key_prefix}_source_name").strip()
+            fallback_source = fallback_source or "Other"
 
     undo_key = f"{key_prefix}_undo_batch"
     latest_batch = db.latest_import_batch()
@@ -199,15 +198,14 @@ def render_upload_analyse_form(key_prefix):
         batch_id = uuid4().hex
         imported_files, added_reviews, errors = 0, 0, []
         for uploaded_file in uploaded_files:
-            try:
-                upload_source = resolve_upload_source(uploaded_file.name)
-            except ValueError as exc:
-                errors.append(str(exc))
-                continue
-            path = RAW_DIR / upload_source.lower() / uploaded_file.name
+            detected_source = source_from_filename(uploaded_file.name)
+            upload_source = resolve_upload_source(uploaded_file.name, fallback_source)
+            source_folder = upload_source.lower() if upload_source in SOURCES else "other"
+            path = RAW_DIR / source_folder / Path(uploaded_file.name).name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(uploaded_file.getbuffer())
-            result = import_file(path, upload_source, date.today(), batch_id=batch_id, force_source=True)
+            result = import_file(path, upload_source, date.today(), batch_id=batch_id,
+                                 force_source=detected_source is not None)
             if result["message"].startswith("ERROR"):
                 errors.append(f"{uploaded_file.name}: {result['message']}")
             else:
@@ -215,6 +213,16 @@ def render_upload_analyse_form(key_prefix):
                 added_reviews += result["added"]
 
         if imported_files:
+            batch_reviews = db.load_reviews()
+            batch_reviews = batch_reviews[batch_reviews["batch_id"] == batch_id]
+            if not batch_reviews.empty:
+                latest_review = batch_reviews["review_date"].max()
+                earliest_review = batch_reviews["review_date"].min()
+                st.session_state["_uploaded_review_focus"] = {
+                    "restaurant": batch_reviews["restaurant"].value_counts().index[0],
+                    "window_days": max(365, (latest_review - earliest_review).days + 1),
+                    "as_of_date": latest_review.date(),
+                }
             st.session_state["upload_notice"] = (
                 f"Analysed {imported_files} file(s); added {added_reviews:,} new reviews."
             )
@@ -329,9 +337,16 @@ if df_all.empty:
     st.stop()
 
 restaurants = sorted(df_all["restaurant"].unique())
+data_sources = sorted(df_all["source"].dropna().astype(str).unique())
 data_end = df_all["review_date"].max().date()
 data_start = df_all["review_date"].min().date()
 ss = st.session_state
+uploaded_review_focus = ss.pop("_uploaded_review_focus", None)
+if uploaded_review_focus:
+    ss["restaurant"] = uploaded_review_focus["restaurant"]
+    ss["page"] = PAGES[1]
+    ss["window_days"] = uploaded_review_focus["window_days"]
+    ss["as_of_date"] = uploaded_review_focus["as_of_date"]
 ss.setdefault("restaurant", "Geetham" if "Geetham" in restaurants else restaurants[0])
 ss.setdefault("page", PAGES[0])
 if ss.page not in PAGES:          # session from an older version of the app
@@ -342,10 +357,16 @@ with st.sidebar:
     st.selectbox("Restaurant", restaurants, key="restaurant")
     rest_df = df_all[df_all["restaurant"] == ss.restaurant]
     branches = st.multiselect("Branches", sorted(rest_df["branch"].unique()), placeholder="All branches")
-    sources = st.multiselect("Sources", SOURCES, default=SOURCES)
-    days = st.select_slider("Window", options=[7, 14, 30, 60, 90, 180, 365], value=90,
+    sources = st.multiselect("Sources", data_sources, default=data_sources)
+    day_options = sorted(set([7, 14, 30, 60, 90, 180, 365, max(365, (data_end - data_start).days + 1)]))
+    ss.setdefault("window_days", 90)
+    if ss.window_days not in day_options:
+        ss.window_days = day_options[-1]
+    days = st.select_slider("Window", options=day_options, key="window_days",
                             format_func=lambda d: f"Last {d} days")
-    as_of = st.date_input("As of", data_end, min_value=data_start, max_value=data_end)
+    if ss.get("as_of_date") is None or not data_start <= ss.as_of_date <= data_end:
+        ss.as_of_date = data_end
+    as_of = st.date_input("As of", min_value=data_start, max_value=data_end, key="as_of_date")
     compare = st.multiselect("Compare with", [r for r in restaurants if r != ss.restaurant],
                              default=[r for r in ("A2B", "Sangeetha") if r in restaurants and r != ss.restaurant])
     st.divider()
@@ -382,12 +403,12 @@ if page == PAGES[0]:
     with st.container(border=True):
         st.caption("GETTING STARTED")
         st.markdown("## Add a batch of reviews")
-        st.markdown("Upload review exports from Google, Zomato or TripAdvisor. We score customer sentiment and "
-                    "group reviews into recurring themes.")
+        st.markdown("Upload any review CSV or Excel file. We detect its platform when possible, then score customer "
+                "sentiment and group reviews into recurring themes.")
         render_upload_analyse_form("search")
         source_counts = rest_df["source"].value_counts()
-        pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok") if source_counts.get(s, 0)
-                        else pill(f"{s} · no data", "p-muted") for s in SOURCES)
+        pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok")
+                for s in data_sources)
         st.markdown(f"<div style='text-align:center'><p class='small'>Sources</p>{pills}</div>", unsafe_allow_html=True)
         st.markdown(f"<p class='small' style='text-align:center'>📅 Last {days} days · {cur_start:%d %b} – "
                     f"{cur_end:%d %b %Y} &nbsp;&nbsp; ⚖️ Compare with: {', '.join(compare) or '—'}</p>",
@@ -396,7 +417,7 @@ if page == PAGES[0]:
     with st.container(border=True):
         st.markdown(f"**Reviews collected by source** · {ss.restaurant} · all dates")
         mx = max(1, source_counts.max() if len(source_counts) else 1)
-        for s in SOURCES:
+        for s in data_sources:
             a, b, c = st.columns([1.2, 6, 0.8])
             a.write(s)
             b.progress(int(source_counts.get(s, 0) / mx * 100))
@@ -412,30 +433,14 @@ if page == PAGES[0]:
         p2.metric("Classified", f"{n_cls:,}", f"{n_cls / max(1, len(df_all)) * 100:.0f}% of reviews",
                   delta_color="off", border=True)
         p3.metric("Issue categories", n_cat, border=True)
-        p4.metric("Chains × platforms", f"{df_all.groupby(['restaurant', 'source']).ngroups}/18", border=True)
+        p4.metric("Restaurant × platform pairs", df_all.groupby(["restaurant", "source"]).ngroups, border=True)
         p5.metric("Branches", df_all["branch"].nunique(), border=True)
-        st.caption(f"Dissertation reference: {PROJECT_REF['raw']:,} raw → {PROJECT_REF['clean']:,} cleaned → "
-                   f"{PROJECT_REF['classified']:,} classified into {PROJECT_REF['categories']} HDBSCAN categories "
-                   f"(rest flagged as noise) · {PROJECT_REF['chains']} chains · {PROJECT_REF['platforms']} platforms · "
-                   f"{PROJECT_REF['branches']} branches.")
-        missing = [c for c in EXPECTED_CHAINS if c not in restaurants]
-        if missing:
-            st.warning("Chains not in the database yet: " + ", ".join(missing))
 
     with st.expander("📥 Import history"):
         runs = db.load_runs()
         if len(runs):
             st.dataframe(runs[["started_at", "source", "file_name", "rows_read", "rows_added", "message"]],
                          hide_index=True, width="stretch")
-
-    with st.expander("🗂️ Data coverage — all 6 chains × 3 platforms"):
-        cov = df_all.pivot_table(index="restaurant", columns="source", values="id", aggfunc="count", fill_value=0)
-        cov = cov.reindex(columns=SOURCES, fill_value=0)
-        cov["Total"] = cov.sum(axis=1)
-        cov["Branches"] = df_all.groupby("restaurant")["branch"].nunique()
-        cov["From"] = df_all.groupby("restaurant")["review_date"].min().dt.strftime("%d %b %Y")
-        cov["To"] = df_all.groupby("restaurant")["review_date"].max().dt.strftime("%d %b %Y")
-        st.dataframe(cov, width="stretch")
 
 # ================================================================== 2. OVERVIEW
 elif page == PAGES[1]:
@@ -649,83 +654,8 @@ elif page == PAGES[2]:
     st.caption("Approving stores the reply and marks the review as replied. Posting to Google/Zomato/TripAdvisor "
                "is done by copying the reply to the platform (their reply APIs need business-account access).")
 
-# ================================================================== 4. LOCATION & AMBIENCE (MODULE 5)
+# ================================================================== 4. CAMPAIGNS (360-DEGREE)
 elif page == PAGES[3]:
-    st.markdown("**Module 5 · Location & ambience intelligence**  \n"
-                "<span class='small'>Finds reviews that mention parking, seating, ambience, cleanliness or "
-                "location, and shows which branches need physical or layout fixes. A mention counts as negative "
-                "when the review is rated 2★ or below (or classed negative).</span>", unsafe_allow_html=True)
-    if cur.empty:
-        st.info("No reviews in this window. Widen the window or change filters in the sidebar.")
-        st.stop()
-
-    flags = aspect_flags(cur)
-    neg = is_negative(cur)
-    rows = []
-    for a in ASPECTS:
-        m = flags[a]
-        rows.append(dict(aspect=a, mentions=int(m.sum()), negative=int((m & neg).sum()),
-                         avg_rating=cur.loc[m, "rating"].mean() if m.any() else None))
-    asp = pd.DataFrame(rows)
-    asp["negative_pct"] = (asp["negative"] / asp["mentions"].where(asp["mentions"] > 0) * 100).round(1)
-
-    cols = st.columns(len(ASPECTS))
-    for col, r in zip(cols, asp.itertuples()):
-        col.metric(r.aspect, r.mentions,
-                   f"{r.negative_pct:.0f}% negative" if pd.notna(r.negative_pct) else "no mentions",
-                   delta_color="off", border=True)
-
-    with st.container(border=True):
-        st.markdown("**Negative-mention rate by branch** · % of a branch's reviews with a negative mention")
-        per = pd.concat([cur[["branch"]], flags.mul(neg, axis=0)], axis=1).groupby("branch").sum()
-        size = cur.groupby("branch").size()
-        min_n = st.slider("Minimum reviews per branch", 1, 50, 5)
-        per = per[size.reindex(per.index) >= min_n]
-        if per.empty:
-            st.info("No branch has enough reviews in this window. Lower the minimum or widen the window.")
-        else:
-            rate = (per.div(size.reindex(per.index), axis=0) * 100).round(1)
-            rate = rate.loc[rate.sum(axis=1).sort_values(ascending=False).index].head(20)
-            fig = px.imshow(rate, text_auto=".0f", aspect="auto", color_continuous_scale=["#FFFFFF", AMBER, RED],
-                            labels=dict(color="% negative"))
-            fig.update_layout(height=120 + 28 * len(rate), margin=dict(l=0, r=0, t=10, b=0),
-                              xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig, width="stretch")
-
-            worst = rate.idxmax(axis=1)
-            fix = pd.DataFrame({"branch": rate.index, "reviews": size.reindex(rate.index).values,
-                                "main_problem": worst.values,
-                                "negative_pct": [rate.loc[b, a] for b, a in worst.items()]})
-            fix = fix[fix["negative_pct"] > 0].head(10)
-            if len(fix):
-                st.markdown("**Branches to fix first**")
-                st.dataframe(fix, hide_index=True, width="stretch",
-                             column_config={"negative_pct": st.column_config.NumberColumn("Negative %", format="%.1f"),
-                                            "main_problem": "Main problem"})
-
-    with st.container(border=True):
-        st.markdown("**Versus competitors** · negative-mention rate per aspect")
-        comp_df = an.filter_reviews(df_all, sources=sources, start=cur_start, end=cur_end)
-        comp_df = comp_df[comp_df["restaurant"].isin([ss.restaurant] + compare)]
-        if len(comp_df):
-            cf = aspect_flags(comp_df).mul(is_negative(comp_df), axis=0)
-            cr = (pd.concat([comp_df[["restaurant"]], cf], axis=1).groupby("restaurant").mean() * 100).round(1)
-            long = cr.reset_index().melt(id_vars="restaurant", var_name="aspect", value_name="negative_pct")
-            fig = px.bar(long, x="aspect", y="negative_pct", color="restaurant", barmode="group",
-                         labels={"negative_pct": "% of reviews", "aspect": ""})
-            fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0), legend_title=None,
-                              legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(fig, width="stretch")
-
-    with st.expander("Read the reviews behind an aspect"):
-        pick = st.selectbox("Aspect", list(ASPECTS))
-        only_neg = st.checkbox("Negative only", value=True)
-        m = flags[pick] & (neg if only_neg else True)
-        st.dataframe(cur.loc[m, ["review_date", "source", "branch", "rating", "issue", "text"]]
-                     .sort_values("review_date", ascending=False), hide_index=True, width="stretch")
-
-# ================================================================== 5. CAMPAIGNS (360-DEGREE)
-elif page == PAGES[4]:
     st.markdown("**Digital marketing · 360-degree campaigns tied to issue clusters**  \n"
                 "<span class='small'>Each campaign answers one HDBSCAN cluster. Success is measured the same way the "
                 "issue was found: the cluster's share of classified reviews should fall on the next pipeline "
@@ -812,8 +742,8 @@ elif page == PAGES[4]:
             st.caption("These are usually positive or low-volume clusters. Add keywords to CAMPAIGNS in main.py "
                        "if a new complaint cluster appears after a re-run.")
 
-# ================================================================== 6. MONTHLY REPORT
-elif page == PAGES[5]:
+# ================================================================== 5. MONTHLY REPORT
+elif page == PAGES[4]:
     rest_all = df_all[df_all["restaurant"] == ss.restaurant]
     months = sorted(rest_all["review_date"].dt.to_period("M").astype(str).unique(), reverse=True)
     c1, c2 = st.columns([2, 1])
@@ -868,8 +798,8 @@ elif page == PAGES[5]:
             past = pd.read_sql_query("SELECT restaurant, month, created_at, pdf_path FROM reports ORDER BY month DESC", con)
         st.dataframe(past, hide_index=True, width="stretch")
 
-# ================================================================== 7. SERVQUAL
-elif page == PAGES[6]:
+# ================================================================== 6. SERVQUAL
+elif page == PAGES[5]:
     st.markdown("**SERVQUAL · customer expectations versus perceived service**  \n"
                 "<span class='small'>A negative gap means perceived service fell short of expectations. "
                 "NLP complaint counts use the current restaurant, source and date filters.</span>",

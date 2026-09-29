@@ -54,8 +54,6 @@ def map_columns(df: pd.DataFrame) -> pd.DataFrame:
             if opt in lower:
                 out[target] = df[lower[opt]]
                 break
-    if "date" not in out:
-        raise ValueError(f"No date column found. Columns in file: {list(df.columns)}")
     if "text" not in out:
         raise ValueError(f"No review text column found. Columns in file: {list(df.columns)}")
     return out
@@ -175,7 +173,7 @@ def normalise(df: pd.DataFrame, source: str, ref: date, force_source: bool = Fal
     split = [split_name(n, b) for n, b in zip(names, branches)]
     out["restaurant"] = [c for c, _ in split]
     out["branch"] = [b for _, b in split]
-    out["review_date"] = [parse_date(v, ref) for v in m.get("date", pd.Series(None, index=m.index))]
+    out["review_date"] = [parse_date(v, ref) or ref for v in m.get("date", pd.Series(ref, index=m.index))]
     out["rating"] = [parse_rating(v) for v in m.get("rating", pd.Series(None, index=m.index))]
     out["text"] = m["text"].apply(display_text)
     out["text_clean"] = m["text"].apply(clean_text)
