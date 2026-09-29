@@ -433,7 +433,7 @@ if page == PAGES[0]:
         p2.metric("Classified", f"{n_cls:,}", f"{n_cls / max(1, len(df_all)) * 100:.0f}% of reviews",
                   delta_color="off", border=True)
         p3.metric("Issue categories", n_cat, border=True)
-        p4.metric("Restaurant × platform pairs", df_all.groupby(["restaurant", "source"]).ngroups, border=True)
+        p4.metric("Number of restaurants", df_all["restaurant"].nunique(), border=True)
         p5.metric("Branches", df_all["branch"].nunique(), border=True)
 
     with st.expander("📥 Import history"):
