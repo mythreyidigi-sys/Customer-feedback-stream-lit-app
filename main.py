@@ -483,7 +483,10 @@ if page == PAGES[0]:
         render_upload_analyse_form("search")
         source_counts = rest_df["source"].value_counts()
         source_counts = source_counts[source_counts.index.astype(str).str.strip().str.casefold() != "other"]
-        pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok")
+        extra_sources = [s for s in source_counts.index if s not in SOURCES]
+        source_counts = source_counts.reindex([*SOURCES, *extra_sources], fill_value=0)
+        pills = "".join(pill(f"{'✓' if source_counts[s] else '–'} {s} · {source_counts[s]} total",
+                             "p-ok" if source_counts[s] else "p-muted")
             for s in source_counts.index)
         st.markdown(f"<div style='text-align:center'><p class='small'>Sources</p>{pills}</div>", unsafe_allow_html=True)
         st.markdown(f"<p class='small' style='text-align:center'>📅 Selected range · {cur_start:%d %b} – "
