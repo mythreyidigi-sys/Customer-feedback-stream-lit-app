@@ -275,8 +275,7 @@ def render_upload_analyse_form(key_prefix):
                 earliest_review = batch_reviews["review_date"].min()
                 st.session_state["_uploaded_review_focus"] = {
                     "restaurant": batch_reviews["restaurant"].value_counts().index[0],
-                    "window_days": max(365, (latest_review - earliest_review).days + 1),
-                    "as_of_date": latest_review.date(),
+                    "date_range": (earliest_review.date(), latest_review.date()),
                 }
             st.session_state["upload_notice"] = (
                 f"Cleaned {total_cleaned:,} review(s) from {len(cleaned_frames)} file(s); "
@@ -400,11 +399,11 @@ data_end = df_all["review_date"].max().date()
 data_start = df_all["review_date"].min().date()
 ss = st.session_state
 uploaded_review_focus = ss.pop("_uploaded_review_focus", None)
+uploaded_date_range = None
 if uploaded_review_focus:
     ss["restaurant"] = uploaded_review_focus["restaurant"]
     ss["page"] = PAGES[1]
-    ss["window_days"] = uploaded_review_focus["window_days"]
-    ss["as_of_date"] = uploaded_review_focus["as_of_date"]
+    uploaded_date_range = uploaded_review_focus["date_range"]
 ss.setdefault("restaurant", "Geetham" if "Geetham" in restaurants else restaurants[0])
 ss["restaurant"] = canonical_chain_name(ss["restaurant"])
 if ss["restaurant"] not in restaurants:
@@ -419,15 +418,29 @@ with st.sidebar:
     rest_df = df_all[df_all["restaurant"] == ss.restaurant]
     branches = st.multiselect("Branches", sorted(rest_df["branch"].unique()), placeholder="All branches")
     sources = st.multiselect("Sources", data_sources, default=data_sources)
-    day_options = sorted(set([7, 14, 30, 60, 90, 180, 365, max(365, (data_end - data_start).days + 1)]))
-    ss.setdefault("window_days", 90)
-    if ss.window_days not in day_options:
-        ss.window_days = day_options[-1]
-    days = st.select_slider("Window", options=day_options, key="window_days",
-                            format_func=lambda d: f"Last {d} days")
-    if ss.get("as_of_date") is None or not data_start <= ss.as_of_date <= data_end:
-        ss.as_of_date = data_end
-    as_of = st.date_input("As of", min_value=data_start, max_value=data_end, key="as_of_date")
+    if uploaded_date_range is not None:
+        default_range = uploaded_date_range
+    else:
+        range_end = ss.get("as_of_date", data_end)
+        if not isinstance(range_end, date) or not data_start <= range_end <= data_end:
+            range_end = data_end
+        range_days = max(1, int(ss.get("window_days", 90)))
+        range_start = max(data_start, (pd.Timestamp(range_end) - pd.Timedelta(days=range_days - 1)).date())
+        default_range = (range_start, range_end)
+    selected_range = st.date_input(
+        "As of",
+        value=default_range,
+        min_value=data_start,
+        max_value=data_end,
+    )
+    if len(selected_range) == 2:
+        cur_start, cur_end = selected_range
+    elif selected_range:
+        cur_start = cur_end = selected_range[0]
+    else:
+        cur_start = cur_end = data_end
+    as_of = cur_end
+    days = (cur_end - cur_start).days + 1
     compare = st.multiselect("Compare with", [r for r in restaurants if r != ss.restaurant],
                              default=[r for r in ("A2B", "Sangeetha") if r in restaurants and r != ss.restaurant])
     st.divider()
@@ -437,7 +450,9 @@ with st.sidebar:
     st.caption("Clusters: Sentence-Transformer + HDBSCAN · labels by Groq LLM")
     st.caption("Replies: " + ("Groq LLM ✅" if groq_available() else "templates (set GROQ_API_KEY for AI replies)"))
 
-(cur_start, cur_end), (prev_start, prev_end) = an.windows(as_of, days)
+(current_window, previous_window) = an.windows(as_of, days)
+cur_start, cur_end = current_window
+prev_start, prev_end = previous_window
 scope = an.filter_reviews(df_all, ss.restaurant, branches or None, sources)
 cur = an.filter_reviews(scope, start=cur_start, end=cur_end)
 prev = an.filter_reviews(scope, start=prev_start, end=prev_end)
@@ -448,8 +463,7 @@ esc_open, esc_overdue = an.open_escalations(upto, as_of)
 # ------------------------------------------------------------------ header + navigation
 h1, h2 = st.columns([3, 2])
 h1.markdown("## 💬 Empathy Engine")
-h2.markdown(f"<div style='text-align:right;padding-top:14px'>🏪 <b>{ss.restaurant}</b> · "
-            f"{', '.join(branches) if branches else 'all branches'} &nbsp; 🔔 "
+h2.markdown(f"<div style='text-align:right;padding-top:14px'>🏪 <b>{ss.restaurant}</b> &nbsp; 🔔 "
             f"{pill(str(len(esc_open)), 'p-urgent')}</div>", unsafe_allow_html=True)
 page = st.radio("Screen", PAGES, key="page", horizontal=True, label_visibility="collapsed")
 st.divider()
@@ -472,7 +486,7 @@ if page == PAGES[0]:
         pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok")
             for s in source_counts.index)
         st.markdown(f"<div style='text-align:center'><p class='small'>Sources</p>{pills}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p class='small' style='text-align:center'>📅 Last {days} days · {cur_start:%d %b} – "
+        st.markdown(f"<p class='small' style='text-align:center'>📅 Selected range · {cur_start:%d %b} – "
                     f"{cur_end:%d %b %Y} &nbsp;&nbsp; ⚖️ Compare with: {', '.join(compare) or '—'}</p>",
                     unsafe_allow_html=True)
 
@@ -507,7 +521,7 @@ if page == PAGES[0]:
 # ================================================================== 2. OVERVIEW
 elif page == PAGES[1]:
     if cur.empty:
-        st.info("No reviews in this window. Widen the window or change filters in the sidebar.")
+        st.info("No reviews in this date range. Widen the range or change filters in the sidebar.")
         st.stop()
     for s in spikes.head(3).itertuples():
         st.error(f"**Spike this week:** {s.issue} at **{s.branch}** — {int(s.this_week)} in the last "
@@ -515,7 +529,7 @@ elif page == PAGES[1]:
 
     k = an.kpis(cur, prev, as_of)
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric(f"Reviews, {days} days", k["reviews"],
+    m1.metric("Reviews in range", k["reviews"],
               None if k["reviews_change"] is None else f"{k['reviews_change']:+.0f}% vs previous", border=True)
     m2.metric("Reputation score /100", k["score"],
               None if k["score_delta"] is None else f"{k['score_delta']:+.1f} pts", border=True)
@@ -566,7 +580,7 @@ elif page == PAGES[1]:
             fig.update_layout(height=max(300, 34 * len(dist) + 50), margin=dict(l=0, r=18, t=10, b=0),
                               coloraxis_showscale=False, xaxis_title="Reviews", yaxis_title=None)
             st.plotly_chart(fig, width="stretch")
-        st.caption(f"{len(dist)} categories · {noise_n} reviews flagged as noise in this window")
+        st.caption(f"{len(dist)} categories · {noise_n} reviews flagged as noise in this date range")
 
     with st.container(border=True):
         st.markdown("**Decision panel · Top 5 issues by priority**  \n"
@@ -610,7 +624,7 @@ elif page == PAGES[1]:
                      column_config={"score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
                                     "negative_pct": st.column_config.NumberColumn("Negative %", format="%.1f")})
 
-    with st.expander("Read the reviews in this window"):
+    with st.expander("Read the reviews in this date range"):
         q = st.text_input("Search text", placeholder="e.g. sambar, parking, rude")
         show = cur if not q else cur[cur["text"].str.contains(q, case=False, na=False)]
         st.dataframe(show[["review_date", "source", "branch", "rating", "issue", "emotion", "urgency", "text"]]
@@ -725,7 +739,7 @@ elif page == PAGES[3]:
 
     cls_cur, cls_prev = classified(cur), classified(prev)
     if cls_cur.empty:
-        st.info("No classified reviews in this window. Widen the window or change filters in the sidebar.")
+        st.info("No classified reviews in this date range. Widen the range or change filters in the sidebar.")
         st.stop()
     cid_cur = cls_cur["issue"].map(match_campaign)
     cid_prev = cls_prev["issue"].map(match_campaign)
@@ -760,7 +774,7 @@ elif page == PAGES[3]:
     k3.metric("Campaigns on hold", int(tbl["status"].str.startswith("⏸").sum()), border=True)
 
     with st.container(border=True):
-        st.markdown(f"**Campaign status** · share of classified reviews, last {days} days vs previous {days}")
+        st.markdown(f"**Campaign status** · share of classified reviews, selected range vs preceding {days} days")
         st.dataframe(tbl.drop(columns="rank"), hide_index=True, width="stretch",
                      column_config={"share": st.column_config.ProgressColumn("Share %", min_value=0,
                                                                              max_value=max(1.0, float(tbl["share"].max())),
@@ -882,7 +896,7 @@ elif page == PAGES[5]:
                   "—" if worst is None else f"{worst['mean_gap']:+.2f}", border=True)
         k3.metric("Survey items represented", f"{item_count} / 20", border=True)
         k4.metric("Classified reviews", f"{int((~is_noise(cur['issue'])).sum()):,}",
-                  f"Last {days} days", border=True)
+                  f"{cur_start:%d %b %Y} – {cur_end:%d %b %Y}", border=True)
 
         chart_col, gap_col = st.columns(2)
         with chart_col.container(border=True):

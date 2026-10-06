@@ -40,6 +40,7 @@ CHAIN_ALIASES = {
     "namma veedu vasanta bhavan": "Namma Veedu Vasantha Bhavan",
     "nvvb": "Namma Veedu Vasantha Bhavan",
     "vasantha bhavan": "Namma Veedu Vasantha Bhavan",
+    "vasanthabhavan": "Namma Veedu Vasantha Bhavan",
     "vasanta bhavan": "Namma Veedu Vasantha Bhavan",
     "geetham": "Geetham",
     "geetham veg restaurant": "Geetham",
