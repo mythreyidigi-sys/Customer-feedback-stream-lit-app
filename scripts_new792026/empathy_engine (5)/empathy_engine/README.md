@@ -1,13 +1,39 @@
 # Empathy Engine: Streamlit ORM app
 
-This app follows your architecture diagram:
+## Architecture
 
-```
-Google (CSV/Excel) ─┐
-Zomato (CSV/Excel) ─┼─► Import pipeline ─► Classifier ─► SQLite (empathy.db) ─► Analytics / Playbook / Replies / Monthly report ─► Streamlit app
-TripAdvisor (CSV)  ─┘   clean names,        issue,          reviews, actions,                                                     Search · Overview ·
-                        branches, dates     emotion,        reports, runs                                                         Action center · Monthly report
-                                            urgency
+```mermaid
+flowchart LR
+    subgraph Sources
+        Google["Google reviews<br/>CSV / Excel"]
+        TripAdvisor["TripAdvisor reviews<br/>CSV / Excel"]
+        Zomato["Zomato reviews · active<br/>CSV / Excel"]
+    end
+
+    subgraph Intake["Search · Analyse pipeline"]
+        Upload["Upload review files"]
+        Archive["Archive original files"]
+        Cleaner["clean_reviews.py<br/>normalize restaurant names<br/>clean text · remove invalid rows<br/>deduplicate reviews"]
+        Importer["Import pipeline<br/>map columns · normalize branches<br/>dates · ratings · sources"]
+    end
+
+    Google --> Upload
+    TripAdvisor --> Upload
+    Zomato --> Upload
+    Upload -->|Analyse| Archive --> Cleaner --> Importer
+    Importer --> Classifier["Classifier<br/>issue · sentiment · emotion<br/>urgency · red flags"]
+    Classifier --> DB[("SQLite · empathy.db<br/>reviews · actions · reports · runs")]
+
+    DB --> Analytics["Analytics<br/>scores · spikes · priorities"]
+    DB --> Playbook["Playbook<br/>issue-specific fixes"]
+    DB --> Replies["Replies<br/>Groq or templates"]
+    DB --> Reports["Monthly report<br/>summary · PDF"]
+
+    Analytics --> App["Streamlit app · app.py<br/>Search · Overview · Action center<br/>Monthly report · Emotion · Root cause"]
+    Playbook --> App
+    Replies --> App
+    Reports --> App
+    App -. "action and report updates" .-> DB
 ```
 
 ## Folder structure
