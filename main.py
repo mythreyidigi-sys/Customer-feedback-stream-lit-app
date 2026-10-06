@@ -526,12 +526,6 @@ if page == PAGES[0]:
             c.write(f"**{source_counts.get(s, 0)}**")
         st.button("See the overview →", on_click=go_overview)
 
-    with st.expander("📥 Import history"):
-        runs = db.load_runs()
-        if len(runs):
-            st.dataframe(runs[["started_at", "source", "file_name", "rows_read", "rows_added", "message"]],
-                         hide_index=True, width="stretch")
-
 # ================================================================== 2. OVERVIEW
 elif page == PAGES[1]:
     if cur.empty:
