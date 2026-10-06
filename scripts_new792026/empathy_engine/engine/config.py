@@ -1,6 +1,7 @@
 """Central settings for Empathy Engine. Edit this file to match your data."""
 from pathlib import Path
 import os
+import re
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -31,11 +32,25 @@ CHAIN_ALIASES = {
     "sri annapoorna": "Sree Annapoorna",
     "annapoorna": "Sree Annapoorna",
     "namma veedu vasantha bhavan": "Namma Veedu Vasantha Bhavan",
+    "namma veedu vasanta bhavan": "Namma Veedu Vasantha Bhavan",
     "nvvb": "Namma Veedu Vasantha Bhavan",
     "vasantha bhavan": "Namma Veedu Vasantha Bhavan",
+    "vasanta bhavan": "Namma Veedu Vasantha Bhavan",
     "geetham": "Geetham",
     "geetham veg restaurant": "Geetham",
 }
+
+
+def canonical_chain_name(value):
+    if not isinstance(value, str):
+        return value
+    label = " ".join(value.split())
+    normalized_label = " ".join(re.sub(r"[\W_]+", " ", label.casefold()).split())
+    for alias in sorted(CHAIN_ALIASES, key=len, reverse=True):
+        normalized_alias = " ".join(re.sub(r"[\W_]+", " ", alias.casefold()).split())
+        if f" {normalized_alias} " in f" {normalized_label} ":
+            return CHAIN_ALIASES[alias]
+    return label
 
 # ---------------------------------------------------------------------------
 # Issue categories = the 10 categories from your HDBSCAN + Groq labelling (Section 6, Step 2).

@@ -13,7 +13,8 @@ import streamlit as st
 
 from engine import analytics as an
 from engine import db
-from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD)
+from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD,
+                           canonical_chain_name)
 from engine.importer import import_file
 from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
@@ -69,11 +70,15 @@ To try the app with sample data first: `python tools/make_sample_data.py` then t
         st.rerun()
     st.stop()
 
-restaurants = sorted(df_all["restaurant"].unique())
+df_all["restaurant"] = df_all["restaurant"].map(canonical_chain_name)
+restaurants = sorted(set(df_all["restaurant"]) | {"Namma Veedu Vasantha Bhavan"})
 data_end = df_all["review_date"].max().date()
 data_start = df_all["review_date"].min().date()
 ss = st.session_state
 ss.setdefault("restaurant", "Geetham" if "Geetham" in restaurants else restaurants[0])
+ss["restaurant"] = canonical_chain_name(ss["restaurant"])
+if ss["restaurant"] not in restaurants:
+    ss["restaurant"] = restaurants[0]
 ss.setdefault("page", PAGES[0])
 
 with st.sidebar:

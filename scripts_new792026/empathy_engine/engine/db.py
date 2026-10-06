@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from .config import DB_PATH
+from .config import DB_PATH, canonical_chain_name
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS reviews (
@@ -120,6 +120,7 @@ def load_reviews() -> pd.DataFrame:
         )
     if not df.empty:
         df["review_date"] = pd.to_datetime(df["review_date"])
+        df["restaurant"] = df["restaurant"].map(canonical_chain_name)
     return df
 
 
