@@ -4,7 +4,7 @@ import re
 import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INPUT_FILE = os.path.join(BASE_DIR, "data", "merged_reviews", "all_restaurants_reviews.xlsx")
+INPUT_FILE = os.path.join(BASE_DIR, "data", "merged_reviews", "all_restaurants_reviews_new.xlsx")
 OUTPUT_FILE = os.path.join(BASE_DIR, "outputs", "cleaned_reviews.xlsx")
 
 

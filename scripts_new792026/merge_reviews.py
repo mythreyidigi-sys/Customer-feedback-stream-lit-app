@@ -1,4 +1,4 @@
-﻿import pandas as pd
+import pandas as pd
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -9,7 +9,7 @@ output_file = os.path.join(
     BASE_DIR,
     "data",
     "merged_reviews",
-    "all_restaurants_reviews.xlsx"
+    "all_restaurants_reviews_new.xlsx"
 )
 
 all_dfs = []
@@ -59,7 +59,16 @@ if not all_dfs:
 
 os.makedirs(os.path.dirname(output_file), exist_ok=True)
 merged_df = pd.concat(all_dfs, ignore_index=True)
-merged_df.to_excel(output_file, index=False)
+if "date" in merged_df.columns:
+    merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce").dt.normalize()
+with pd.ExcelWriter(output_file, engine="openpyxl", datetime_format="YYYY-MM-DD") as writer:
+    merged_df.to_excel(writer, index=False)
+    sheet = writer.sheets["Sheet1"]
+    for col_cells in sheet.columns:
+        header = col_cells[0].value
+        sheet.column_dimensions[col_cells[0].column_letter].width = (
+            14 if header == "date" else 40 if header == "review" else 22
+        )
 
 print("Merged Reviews:", len(merged_df))
 print("Saved:", output_file)
