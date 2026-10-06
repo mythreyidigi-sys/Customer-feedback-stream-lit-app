@@ -28,6 +28,7 @@ CHAIN_ALIASES = {
     "sangeetha": "Sangeetha",
     "sangeetha veg restaurant": "Sangeetha",
     "hotel saravana bhavan": "Saravana Bhavan",
+    "saravanabhavan": "Saravana Bhavan",
     "saravana bhavan": "Saravana Bhavan",
     "hsb": "Saravana Bhavan",
     "sree annapoorna": "Sree Annapoorna",
@@ -39,6 +40,13 @@ CHAIN_ALIASES = {
     "geetham": "Geetham",
     "geetham veg restaurant": "Geetham",
 }
+
+
+def canonical_chain_name(value):
+    if not isinstance(value, str):
+        return value
+    label = " ".join(value.split())
+    return CHAIN_ALIASES.get(label.casefold(), label)
 
 # ---------------------------------------------------------------------------
 # Issue categories = the 10 categories from your HDBSCAN + Groq labelling (Section 6, Step 2).

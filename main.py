@@ -52,7 +52,8 @@ import streamlit as st
 
 from engine import analytics as an
 from engine import db
-from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD)
+from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD,
+                           canonical_chain_name)
 from engine.importer import import_file, source_from_filename
 from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
@@ -336,6 +337,7 @@ if df_all.empty:
         render_upload_analyse_form("empty_state")
     st.stop()
 
+df_all["restaurant"] = df_all["restaurant"].map(canonical_chain_name)
 restaurants = sorted(df_all["restaurant"].unique())
 data_sources = sorted(df_all["source"].dropna().astype(str).unique())
 data_end = df_all["review_date"].max().date()
@@ -348,6 +350,9 @@ if uploaded_review_focus:
     ss["window_days"] = uploaded_review_focus["window_days"]
     ss["as_of_date"] = uploaded_review_focus["as_of_date"]
 ss.setdefault("restaurant", "Geetham" if "Geetham" in restaurants else restaurants[0])
+ss["restaurant"] = canonical_chain_name(ss["restaurant"])
+if ss["restaurant"] not in restaurants:
+    ss["restaurant"] = restaurants[0]
 ss.setdefault("page", PAGES[0])
 if ss.page not in PAGES:          # session from an older version of the app
     ss.page = PAGES[0]
