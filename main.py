@@ -111,7 +111,7 @@ CAMPAIGNS = [
          channels=["Paid social", "Google Ads", "Zomato/Swiggy in-app", "Influencer/UGC"],
          kpi="Table-turnaround time; 'wait/slow/negligence' mentions in new reviews",
          mode="gated"),
-    dict(id=1, name="Full Plate Promise", theme="Food quantity & value for money",
+    dict(id=1, name="Served the way you'd serve family.", theme="Food quantity & value for money",
          keys=("quantity", "value", "portion", "price", "money", "cost", "expensive"),
          headline="Full plate. Fair price. No compromises on either.",
          channels=["Paid social", "In-store signage", "Influencer/UGC"],
