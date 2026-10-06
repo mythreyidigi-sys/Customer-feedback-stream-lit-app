@@ -1,2 +1,5 @@
 [theme]
 primaryColor = "#16803C"
+
+[theme.sidebar]
+textColor = "#2C2C2A"
