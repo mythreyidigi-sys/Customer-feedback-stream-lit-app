@@ -29,9 +29,12 @@ Setup:
 This file needs the `engine/` package. It looks for it next to main.py first,
 then in empathy_engine/ and scripts_new792026/empathy_engine (5)/empathy_engine/.
 """
+import hashlib
 import sys
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 # ------------------------------------------------------------------ locate the engine package
@@ -44,6 +47,9 @@ _CANDIDATES = [
 APP_DIR = next((p for p in _CANDIDATES if (p / "engine").is_dir()), _HERE)
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
+_CLEANER_DIR = _HERE / "scripts_new792026"
+if str(_CLEANER_DIR) not in sys.path:
+    sys.path.insert(0, str(_CLEANER_DIR))
 
 import pandas as pd
 import plotly.express as px
@@ -54,10 +60,11 @@ from engine import analytics as an
 from engine import db
 from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD,
                            canonical_chain_name)
-from engine.importer import import_file, source_from_filename
+from engine.importer import import_file, read_file, source_from_filename
 from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
 from engine.report import build_report, save_report
+from clean_reviews import OUTPUT_FILE as CLEANED_REVIEWS_OUTPUT, clean_reviews_dataframe
 
 st.set_page_config(page_title="Empathy Engine", page_icon="💬", layout="wide")
 db.init_db()
@@ -149,7 +156,7 @@ def render_upload_analyse_form(key_prefix):
         "Drop files here, or click to browse", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
         key=f"{key_prefix}_files",
     )
-    st.caption("CSV, XLSX or XLS · up to 200 MB each · add several at once · relative dates use today")
+    st.caption("CSV, XLSX or XLS · upload files, then run the cleaning and analysis pipeline · relative dates use today")
     fallback_source = "Other"
     if uploaded_files and any(source_from_filename(file.name) is None for file in uploaded_files):
         source_choice = st.selectbox(
@@ -159,6 +166,20 @@ def render_upload_analyse_form(key_prefix):
         if source_choice == "Other":
             fallback_source = st.text_input("Platform name", value="Other", key=f"{key_prefix}_source_name").strip()
             fallback_source = fallback_source or "Other"
+
+    pipeline_key = f"{key_prefix}_processed_upload_hash"
+    if uploaded_files:
+        upload_digest = hashlib.sha256()
+        for uploaded_file in uploaded_files:
+            upload_digest.update(uploaded_file.name.encode("utf-8"))
+            upload_digest.update(uploaded_file.getbuffer())
+        upload_digest.update(fallback_source.encode("utf-8"))
+        upload_hash = upload_digest.hexdigest()
+        if upload_hash != st.session_state.get(pipeline_key):
+            st.session_state[pipeline_key] = upload_hash
+            st.session_state.pop("_cleaned_upload_bytes", None)
+    else:
+        st.session_state.pop(pipeline_key, None)
 
     undo_key = f"{key_prefix}_undo_batch"
     latest_batch = db.latest_import_batch()
@@ -170,6 +191,14 @@ def render_upload_analyse_form(key_prefix):
         "↶ Undo last upload", key=f"{key_prefix}_undo", disabled=latest_batch is None,
         help="Reverse the latest imported batch of review documents.",
     )
+
+    if "_cleaned_upload_bytes" in st.session_state:
+        st.download_button(
+            "Download cleaned batch", data=st.session_state["_cleaned_upload_bytes"],
+            file_name="cleaned_reviews.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"{key_prefix}_cleaned_download",
+        )
 
     if undo_clicked and latest_batch is not None:
         st.session_state[undo_key] = latest_batch["batch_id"]
@@ -198,20 +227,45 @@ def render_upload_analyse_form(key_prefix):
     if analyse_clicked:
         batch_id = uuid4().hex
         imported_files, added_reviews, errors = 0, 0, []
-        for uploaded_file in uploaded_files:
-            detected_source = source_from_filename(uploaded_file.name)
-            upload_source = resolve_upload_source(uploaded_file.name, fallback_source)
-            source_folder = upload_source.lower() if upload_source in SOURCES else "other"
-            path = RAW_DIR / source_folder / Path(uploaded_file.name).name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(uploaded_file.getbuffer())
-            result = import_file(path, upload_source, date.today(), batch_id=batch_id,
-                                 force_source=detected_source is not None)
-            if result["message"].startswith("ERROR"):
-                errors.append(f"{uploaded_file.name}: {result['message']}")
-            else:
-                imported_files += 1
-                added_reviews += result["added"]
+        cleaned_frames = []
+        total_cleaned, invalid_removed, duplicates_removed = 0, 0, 0
+        st.session_state.pop("_cleaned_upload_bytes", None)
+        with TemporaryDirectory(prefix="empathy_clean_") as temp_dir:
+            for file_index, uploaded_file in enumerate(uploaded_files):
+                detected_source = source_from_filename(uploaded_file.name)
+                upload_source = resolve_upload_source(uploaded_file.name, fallback_source)
+                source_folder = upload_source.lower() if upload_source in SOURCES else "other"
+                path = RAW_DIR / source_folder / Path(uploaded_file.name).name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(uploaded_file.getbuffer())
+                try:
+                    raw_reviews = read_file(path)
+                    cleaned_reviews, cleaning_stats = clean_reviews_dataframe(raw_reviews)
+                    cleaned_frames.append(cleaned_reviews)
+                    total_cleaned += cleaning_stats["final"]
+                    invalid_removed += cleaning_stats["invalid_removed"]
+                    duplicates_removed += cleaning_stats["duplicates_removed"]
+
+                    cleaned_path = Path(temp_dir) / f"{file_index}_{Path(uploaded_file.name).stem}_cleaned.xlsx"
+                    cleaned_reviews.to_excel(cleaned_path, index=False)
+                    result = import_file(cleaned_path, upload_source, date.today(), batch_id=batch_id,
+                                         force_source=detected_source is not None)
+                    if result["message"].startswith("ERROR"):
+                        errors.append(f"{uploaded_file.name}: {result['message']}")
+                    else:
+                        imported_files += 1
+                        added_reviews += result["added"]
+                except Exception as exc:
+                    errors.append(f"{uploaded_file.name}: {exc}")
+
+        if cleaned_frames:
+            cleaned_batch = pd.concat(cleaned_frames, ignore_index=True, sort=False)
+            output_path = Path(CLEANED_REVIEWS_OUTPUT)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            cleaned_batch.to_excel(output_path, index=False)
+            output_buffer = BytesIO()
+            cleaned_batch.to_excel(output_buffer, index=False)
+            st.session_state["_cleaned_upload_bytes"] = output_buffer.getvalue()
 
         if imported_files:
             batch_reviews = db.load_reviews()
@@ -225,7 +279,9 @@ def render_upload_analyse_form(key_prefix):
                     "as_of_date": latest_review.date(),
                 }
             st.session_state["upload_notice"] = (
-                f"Analysed {imported_files} file(s); added {added_reviews:,} new reviews."
+                f"Cleaned {total_cleaned:,} review(s) from {len(cleaned_frames)} file(s); "
+                f"removed {invalid_removed:,} invalid and {duplicates_removed:,} duplicate row(s); "
+                f"analysed {imported_files} file(s) and added {added_reviews:,} new reviews."
             )
             if errors:
                 st.session_state["upload_notice"] += f" {len(errors)} file(s) could not be analysed."
