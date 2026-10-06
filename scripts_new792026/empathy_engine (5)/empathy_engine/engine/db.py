@@ -222,6 +222,18 @@ def undo_import_batch(batch_id: str) -> int:
     return deleted
 
 
+def undo_all_import_batches() -> int:
+    with connect() as con:
+        batch_ids = [r[0] for r in con.execute(
+            "SELECT DISTINCT batch_id FROM runs WHERE batch_id IS NOT NULL AND undone_at IS NULL")]
+        deleted = 0
+        for batch_id in batch_ids:
+            con.execute("DELETE FROM actions WHERE review_id IN (SELECT id FROM reviews WHERE batch_id=?)", (batch_id,))
+            deleted += con.execute("DELETE FROM reviews WHERE batch_id=?", (batch_id,)).rowcount
+        con.execute("UPDATE runs SET undone_at=? WHERE batch_id IS NOT NULL AND undone_at IS NULL", (now(),))
+    return deleted
+
+
 def load_reviews() -> pd.DataFrame:
     """All reviews joined with their action status."""
     with connect() as con:

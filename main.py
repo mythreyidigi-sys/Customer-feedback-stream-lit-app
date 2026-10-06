@@ -183,7 +183,7 @@ def render_upload_analyse_form(key_prefix):
 
     undo_key = f"{key_prefix}_undo_batch"
     latest_batch = db.latest_import_batch()
-    analyse_col, undo_col = st.columns([1, 1])
+    analyse_col, undo_col, undo_all_col = st.columns([1, 1, 1])
     analyse_clicked = analyse_col.button(
         "Analyse", type="primary", key=f"{key_prefix}_analyse", disabled=not uploaded_files
     )
@@ -191,6 +191,29 @@ def render_upload_analyse_form(key_prefix):
         "↶ Undo last upload", key=f"{key_prefix}_undo", disabled=latest_batch is None,
         help="Reverse the latest imported batch of review documents.",
     )
+    undo_all_key = f"{key_prefix}_undo_all"
+    undo_all_clicked = undo_all_col.button(
+        "↶ Undo all uploads", key=f"{key_prefix}_undo_all_btn", disabled=latest_batch is None,
+        help="Remove every batch uploaded through this screen. Previously loaded data stays.",
+    )
+    if undo_all_clicked:
+        st.session_state[undo_all_key] = True
+        st.rerun()
+    if st.session_state.get(undo_all_key):
+        if latest_batch is None:
+            st.session_state.pop(undo_all_key, None)
+        else:
+            st.warning("Undo all uploads? This removes every review imported through uploads. "
+                       "Original files remain in the raw archive.")
+            yes_col, no_col = st.columns(2)
+            if yes_col.button("Confirm undo all", key=f"{key_prefix}_confirm_undo_all", type="primary"):
+                removed = db.undo_all_import_batches()
+                st.session_state.pop(undo_all_key, None)
+                st.session_state["upload_notice"] = f"Undid all uploads and removed {removed:,} review(s)."
+                st.rerun()
+            if no_col.button("Keep uploads", key=f"{key_prefix}_cancel_undo_all"):
+                st.session_state.pop(undo_all_key, None)
+                st.rerun()
 
     if "_cleaned_upload_bytes" in st.session_state:
         st.download_button(
