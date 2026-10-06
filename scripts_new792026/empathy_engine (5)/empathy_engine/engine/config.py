@@ -36,6 +36,7 @@ CHAIN_ALIASES = {
     "sri annapoorna": "Sree Annapoorna",
     "annapoorna": "Sree Annapoorna",
     "namma veedu vasantha bhavan": "Namma Veedu Vasantha Bhavan",
+    "namma veddu vasantha bhavan": "Namma Veedu Vasantha Bhavan",
     "namma veedu vasanta bhavan": "Namma Veedu Vasantha Bhavan",
     "nvvb": "Namma Veedu Vasantha Bhavan",
     "vasantha bhavan": "Namma Veedu Vasantha Bhavan",
