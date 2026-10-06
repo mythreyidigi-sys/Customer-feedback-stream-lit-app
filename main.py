@@ -72,7 +72,7 @@ db.init_db()
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
 PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Early warning", "📣 4. Campaigns",
-         "📄 5. Monthly report", "🧭 6. SERVQUAL"]
+         "📄 5. Monthly report", "🧭 6. SERVQUAL", "📈 7. Power BI"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -975,3 +975,26 @@ elif page == PAGES[5]:
                 "NLP mentions reflect the selected restaurant and current dashboard filters. "
                 "Dimensions without mapped survey items remain unscored."
             )
+
+# ================================================================== 7. POWER BI
+elif page == PAGES[6]:
+    import os
+    import streamlit.components.v1 as components
+    try:
+        secret_url = st.secrets.get("POWERBI_EMBED_URL", "")
+    except Exception:
+        secret_url = ""
+    default_url = secret_url or os.environ.get("POWERBI_EMBED_URL", "")
+    url = st.text_input("Power BI 'Publish to web' embed URL", value=default_url,
+                        placeholder="https://app.powerbi.com/view?r=...")
+    height = st.slider("Report height (px)", 400, 1200, 700, 50)
+    if not url:
+        st.info("In Power BI Service: File → Embed report → Publish to web (public), copy the link "
+                "and paste it above. To preset it, set `POWERBI_EMBED_URL` in the environment or "
+                "`.streamlit/secrets.toml`.")
+    elif not url.startswith("https://app.powerbi.com/"):
+        st.error("Enter a valid https://app.powerbi.com/... URL.")
+    else:
+        components.iframe(url, height=height, scrolling=True)
+        st.caption("Publish to web reports are public to anyone with the link; do not use it for "
+                   "confidential data.")

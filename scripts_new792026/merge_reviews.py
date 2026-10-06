@@ -33,6 +33,7 @@ for root, _, files in os.walk(input_folder):
                 "branch": {"branch"},
                 "review": {"review", "reviews"},
                 "restaurant": {"restaurant"},
+                "date": {"date"},
             }
             for canonical_column, aliases in column_aliases.items():
                 matching_columns = [
