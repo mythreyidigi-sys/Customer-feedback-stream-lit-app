@@ -407,8 +407,9 @@ if page == PAGES[0]:
                 "sentiment and group reviews into recurring themes.")
         render_upload_analyse_form("search")
         source_counts = rest_df["source"].value_counts()
+        source_counts = source_counts[source_counts.index.astype(str).str.strip().str.casefold() != "other"]
         pills = "".join(pill(f"✓ {s} · {source_counts.get(s, 0)} total", "p-ok")
-                for s in data_sources)
+            for s in source_counts.index)
         st.markdown(f"<div style='text-align:center'><p class='small'>Sources</p>{pills}</div>", unsafe_allow_html=True)
         st.markdown(f"<p class='small' style='text-align:center'>📅 Last {days} days · {cur_start:%d %b} – "
                     f"{cur_end:%d %b %Y} &nbsp;&nbsp; ⚖️ Compare with: {', '.join(compare) or '—'}</p>",
@@ -417,7 +418,7 @@ if page == PAGES[0]:
     with st.container(border=True):
         st.markdown(f"**Reviews collected by source** · {ss.restaurant} · all dates")
         mx = max(1, source_counts.max() if len(source_counts) else 1)
-        for s in data_sources:
+        for s in source_counts.index:
             a, b, c = st.columns([1.2, 6, 0.8])
             a.write(s)
             b.progress(int(source_counts.get(s, 0) / mx * 100))
