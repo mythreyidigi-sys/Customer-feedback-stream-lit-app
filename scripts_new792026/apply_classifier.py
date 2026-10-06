@@ -81,7 +81,7 @@ df.to_excel(output_path, index=False)
 print(f"\n✓ Saved classified reviews to: {output_path}")
 
 # Save summary statistics
-summary_output = BASE_DIR / "outputs" / "issue_classification_summary.xlsx"
+summary_output = BASE_DIR / "outputs" / "issue_classification_summary_new.xlsx"
 with pd.ExcelWriter(summary_output) as writer:
     issue_dist.to_excel(writer, sheet_name="Issue Distribution", index=False)
     restaurant_issues.to_excel(writer, sheet_name="Restaurant Issues")
