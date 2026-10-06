@@ -526,18 +526,6 @@ if page == PAGES[0]:
             c.write(f"**{source_counts.get(s, 0)}**")
         st.button("See the overview →", on_click=go_overview)
 
-    with st.container(border=True):
-        st.markdown("**Pipeline & dataset** · live from the database")
-        n_cls = int((~is_noise(df_all["issue"])).sum())
-        n_cat = classified(df_all)["issue"].nunique()
-        p1, p2, p3, p4, p5 = st.columns(5)
-        p1.metric("Reviews", f"{len(df_all):,}", border=True)
-        p2.metric("Classified", f"{n_cls:,}", f"{n_cls / max(1, len(df_all)) * 100:.0f}% of reviews",
-                  delta_color="off", border=True)
-        p3.metric("Issue categories", n_cat, border=True)
-        p4.metric("Number of restaurants", df_all["restaurant"].nunique(), border=True)
-        p5.metric("Branches", df_all["branch"].nunique(), border=True)
-
     with st.expander("📥 Import history"):
         runs = db.load_runs()
         if len(runs):
