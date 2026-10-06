@@ -7,6 +7,10 @@ from .config import HIGH_THRESHOLD, ISSUE_SEVERITY, POSITIVE_ISSUE, SPIKE_MIN_CO
 CLOSED = ("Replied", "Resolved")
 
 
+def _without_other_issue(df):
+    return df[~df["issue"].astype("string").str.strip().str.casefold().eq("other")]
+
+
 def filter_reviews(df, restaurant=None, branches=None, sources=None, start=None, end=None):
     m = pd.Series(True, index=df.index)
     if restaurant:
@@ -90,6 +94,7 @@ def monthly_trend(df):
 def top_issues(cur, prev, n=None):
     """Complaint issues (negative + neutral reviews) with change vs previous window."""
     def counts(d):
+        d = _without_other_issue(d)
         d = d[(d["sentiment"] != "positive") & (d["issue"] != POSITIVE_ISSUE)]
         return d["issue"].value_counts()
     c, p = counts(cur), counts(prev)
@@ -101,6 +106,7 @@ def top_issues(cur, prev, n=None):
 
 def priority_table(cur):
     """Priority = 0.4 x frequency (normalised) + 0.3 x negative share + 0.3 x low rating (5 - avg) / 4."""
+    cur = _without_other_issue(cur)
     d = cur[cur["issue"] != POSITIVE_ISSUE]
     if d.empty:
         return pd.DataFrame()
@@ -120,6 +126,7 @@ def priority_table(cur):
 def spikes(df, as_of):
     """Negative reviews per branch x issue in the last 7 days vs the average of the 4 weeks before."""
     as_of = pd.Timestamp(as_of).normalize()
+    df = _without_other_issue(df)
     neg = df[(df["sentiment"] == "negative") & (df["issue"] != POSITIVE_ISSUE)]
     last = neg[neg["review_date"] > as_of - pd.Timedelta(days=7)]
     base = neg[(neg["review_date"] <= as_of - pd.Timedelta(days=7)) & (neg["review_date"] > as_of - pd.Timedelta(days=35))]
@@ -145,13 +152,16 @@ def branch_table(cur):
     if cur.empty:
         return pd.DataFrame()
     g = cur.groupby("branch")
+    issue_rows = _without_other_issue(cur)
     t = pd.DataFrame({
         "reviews": g.size(),
         "avg_rating": g["rating"].mean().round(2),
         "negative_pct": (g["sentiment"].apply(lambda s: (s == "negative").mean()) * 100).round(1),
         "score": g.apply(reputation_score, include_groups=False),
-        "top_complaint": g.apply(lambda d: d.loc[d["issue"] != POSITIVE_ISSUE, "issue"].mode().iat[0]
-                                 if (d["issue"] != POSITIVE_ISSUE).any() else "-", include_groups=False),
+        "top_complaint": issue_rows.groupby("branch").apply(
+            lambda d: d.loc[d["issue"] != POSITIVE_ISSUE, "issue"].mode().iat[0]
+            if (d["issue"] != POSITIVE_ISSUE).any() else "-", include_groups=False
+        ).reindex(g.size().index, fill_value="-"),
     })
     return t.sort_values("score").reset_index()
 
