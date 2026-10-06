@@ -393,7 +393,7 @@ if df_all.empty:
     st.stop()
 
 df_all["restaurant"] = df_all["restaurant"].map(canonical_chain_name)
-restaurants = sorted(set(df_all["restaurant"]) | {"Namma Veedu Vasantha Bhavan", "Saravana Bhavan"})
+restaurants = sorted(set(df_all["restaurant"]) | {"Namma Veedu Vasantha Bhavan", "Saravana Bhavan", "Geetham"})
 data_sources = sorted(df_all["source"].dropna().astype(str).unique())
 data_end = df_all["review_date"].max().date()
 data_start = df_all["review_date"].min().date()
