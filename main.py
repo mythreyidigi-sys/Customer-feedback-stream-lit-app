@@ -753,14 +753,22 @@ elif page == PAGES[4]:
                    "a speed promise followed by a slow visit backfires. Campaign 5 (hygiene) pauses on any spike.")
 
     with st.container(border=True):
-        st.markdown("**Weekly complaint volume per campaign cluster** · last 5 weeks")
-        trend = pd.DataFrame({c["name"]: weekly_counts(upto[cid_upto == c["id"]], as_of) for c in CAMPAIGNS},
-                             index=[f"W-{i}" if i else "This week" for i in range(4, -1, -1)])
-        fig = px.line(trend.reset_index().melt(id_vars="index", var_name="campaign", value_name="reviews"),
-                      x="index", y="reviews", color="campaign", markers=True)
-        fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0), xaxis_title=None, legend_title=None,
-                          legend=dict(orientation="h", y=-0.25))
-        st.plotly_chart(fig, width="stretch")
+        st.markdown("**Weekly complaint volume per campaign cluster** · selected date range")
+        in_range = upto[upto["review_date"] >= pd.Timestamp(cur_start)]
+        cid_range = cid_upto.loc[in_range.index]
+        week_start = (in_range["review_date"].dt.normalize() - pd.Timestamp(cur_start)).dt.days // 7
+        n_weeks = max(1, (pd.Timestamp(cur_end) - pd.Timestamp(cur_start)).days // 7 + 1)
+        labels = [(pd.Timestamp(cur_start) + pd.Timedelta(days=7 * i)).strftime("%d %b") for i in range(n_weeks)]
+        trend = pd.DataFrame({c["name"]: [int(((cid_range == c["id"]) & (week_start == i)).sum())
+                                          for i in range(n_weeks)] for c in CAMPAIGNS}, index=labels)
+        if trend.to_numpy().sum() == 0:
+            st.info("No complaints matching these campaign clusters in this date range. Widen the range in the sidebar.")
+        else:
+            fig = px.line(trend.reset_index().melt(id_vars="index", var_name="campaign", value_name="reviews"),
+                          x="index", y="reviews", color="campaign", markers=True)
+            fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0), xaxis_title="Week starting",
+                              legend_title=None, legend=dict(orientation="h", y=-0.3))
+            st.plotly_chart(fig, width="stretch")
 
     c1, c2 = st.columns([3, 2])
     with c1.container(border=True):
