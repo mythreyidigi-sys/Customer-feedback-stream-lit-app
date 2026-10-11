@@ -159,7 +159,7 @@ def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
 
     st.caption("Sentiment = VADER compound score (−1 to +1) on each review. Promoter ≥ 0.5, Detractor ≤ 0, "
                "otherwise Neutral. Price perception is keyword-based.")
-    tab_rep, tab_overview, tab_issues, tab_segments = st.tabs(["Reputation scoring and clustering", "Overview", "Issues & sentiment", "Segments & price"])
+    tab_overview, tab_rep, tab_issues, tab_segments = st.tabs(["Overview", "Reputation scoring and clustering", "Issues & sentiment", "Segments & price"])
 
     by_rest = df.groupby("restaurant").agg(reviews=("review", "size"), avg_sentiment=("sentiment_score", "mean"),
                                            branches=("branch", "nunique")).reset_index()
