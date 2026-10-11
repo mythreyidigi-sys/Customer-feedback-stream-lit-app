@@ -10,3 +10,8 @@ scipy>=1.10
 matplotlib>=3.7
 tqdm>=4.66
 groq>=0.9
+vaderSentiment
+wordcloud
+playwright
+python-dateutil
+schedule

@@ -3,7 +3,9 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-input_folder = os.path.join(BASE_DIR, "Analysis", "data", "raw_reviews_new")
+input_folder = os.environ.get("REVIEWS_INPUT_DIR") or os.path.join(
+    BASE_DIR, "Analysis", "data", "raw_reviews_new"
+)
 
 output_file = os.path.join(
     BASE_DIR,
@@ -34,6 +36,8 @@ for root, _, files in os.walk(input_folder):
                 "review": {"review", "reviews"},
                 "restaurant": {"restaurant"},
                 "date": {"date"},
+                "rating": {"rating", "star", "stars"},
+                "source": {"source", "platform"},
             }
             for canonical_column, aliases in column_aliases.items():
                 matching_columns = [

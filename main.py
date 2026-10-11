@@ -65,6 +65,7 @@ from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
 from engine.report import build_report, save_report
 from clean_reviews import OUTPUT_FILE as CLEANED_REVIEWS_OUTPUT, clean_reviews_dataframe
+import analytics_dashboard
 
 st.set_page_config(page_title="Empathy Engine", page_icon="💬", layout="wide")
 db.init_db()
@@ -72,7 +73,7 @@ db.init_db()
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
 PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Early warning", "📣 4. Campaigns",
-         "📄 5. Monthly report", "🧭 6. SERVQUAL"]
+         "📄 5. Monthly report", "🧭 6. SERVQUAL", "📈 7. Analytics"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -983,3 +984,7 @@ elif page == PAGES[5]:
                 "NLP mentions reflect the selected restaurant and current dashboard filters. "
                 "Dimensions without mapped survey items remain unscored."
             )
+
+# ================================================================== 7. ANALYTICS
+elif page == PAGES[6]:
+    analytics_dashboard.render(_HERE)

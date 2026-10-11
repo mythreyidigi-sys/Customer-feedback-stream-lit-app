@@ -1,0 +1,61 @@
+restaurant,Issue,Frequency
+A2B,Ambience & Seating,13
+A2B,Billing & Online Ordering Issues,5
+A2B,Cleanliness & Restroom Hygiene,41
+A2B,Food Quantity & Value for Money,565
+A2B,Food Variety & Fast Service,105
+A2B,Parking & Accessibility,70
+A2B,Poor Experience & Food Hygiene Complaints,78
+A2B,Service Quality,73
+A2B,Slow Service & Staff Negligence,141
+A2B,Staff Courtesy & Behaviour,16
+Geetham,Ambience & Seating,5
+Geetham,Billing & Online Ordering Issues,6
+Geetham,Cleanliness & Restroom Hygiene,15
+Geetham,Food Quantity & Value for Money,208
+Geetham,Food Variety & Fast Service,33
+Geetham,Parking & Accessibility,11
+Geetham,Poor Experience & Food Hygiene Complaints,20
+Geetham,Service Quality,34
+Geetham,Slow Service & Staff Negligence,67
+Geetham,Staff Courtesy & Behaviour,8
+Namma Veedu Vasantha Bhavan,Ambience & Seating,5
+Namma Veedu Vasantha Bhavan,Billing & Online Ordering Issues,1
+Namma Veedu Vasantha Bhavan,Cleanliness & Restroom Hygiene,34
+Namma Veedu Vasantha Bhavan,Food Quantity & Value for Money,366
+Namma Veedu Vasantha Bhavan,Food Variety & Fast Service,39
+Namma Veedu Vasantha Bhavan,Parking & Accessibility,19
+Namma Veedu Vasantha Bhavan,Poor Experience & Food Hygiene Complaints,42
+Namma Veedu Vasantha Bhavan,Service Quality,49
+Namma Veedu Vasantha Bhavan,Slow Service & Staff Negligence,111
+Namma Veedu Vasantha Bhavan,Staff Courtesy & Behaviour,10
+Sangeetha,Ambience & Seating,28
+Sangeetha,Billing & Online Ordering Issues,4
+Sangeetha,Cleanliness & Restroom Hygiene,74
+Sangeetha,Food Quantity & Value for Money,842
+Sangeetha,Food Variety & Fast Service,93
+Sangeetha,Parking & Accessibility,66
+Sangeetha,Poor Experience & Food Hygiene Complaints,82
+Sangeetha,Service Quality,103
+Sangeetha,Slow Service & Staff Negligence,208
+Sangeetha,Staff Courtesy & Behaviour,25
+Saravana Bhavan,Ambience & Seating,5
+Saravana Bhavan,Billing & Online Ordering Issues,3
+Saravana Bhavan,Cleanliness & Restroom Hygiene,16
+Saravana Bhavan,Food Quantity & Value for Money,455
+Saravana Bhavan,Food Variety & Fast Service,60
+Saravana Bhavan,Parking & Accessibility,15
+Saravana Bhavan,Poor Experience & Food Hygiene Complaints,60
+Saravana Bhavan,Service Quality,43
+Saravana Bhavan,Slow Service & Staff Negligence,99
+Saravana Bhavan,Staff Courtesy & Behaviour,7
+Sree Annapoorna,Ambience & Seating,9
+Sree Annapoorna,Billing & Online Ordering Issues,5
+Sree Annapoorna,Cleanliness & Restroom Hygiene,45
+Sree Annapoorna,Food Quantity & Value for Money,818
+Sree Annapoorna,Food Variety & Fast Service,195
+Sree Annapoorna,Parking & Accessibility,73
+Sree Annapoorna,Poor Experience & Food Hygiene Complaints,109
+Sree Annapoorna,Service Quality,100
+Sree Annapoorna,Slow Service & Staff Negligence,301
+Sree Annapoorna,Staff Courtesy & Behaviour,26
