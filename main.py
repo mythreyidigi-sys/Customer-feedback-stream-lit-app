@@ -556,49 +556,6 @@ elif page == PAGES[2]:
     m4.metric("Open escalations", len(esc_c), f"{len(over_c)} overdue" if len(over_c) else "none overdue",
               delta_color="inverse" if len(over_c) else "off", border=True)
 
-    c1, c2 = st.columns(2)
-    with c1.container(border=True):
-        st.markdown("**Weekly sentiment**")
-        ws = an.weekly_sentiment(cur)
-        fig = px.bar(ws, x="week", y="reviews", color="sentiment", color_discrete_map=SENT_COLORS,
-                     category_orders={"sentiment": ["negative", "neutral", "positive"]})
-        fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0), legend_title=None, xaxis_title=None,
-                          legend=dict(orientation="h", y=-0.2), bargap=0.3)
-        st.plotly_chart(fig, width="stretch")
-    with c2.container(border=True):
-        st.markdown("**Reputation score by month** (6 months)")
-        mt = an.monthly_trend(upto)
-        fig = go.Figure(go.Scatter(x=mt["month"], y=mt["score"], mode="lines+markers+text",
-                                   text=mt["score"].round(0), textposition="top center",
-                                   line=dict(color=ACCENT, width=3)))
-        fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0), yaxis=dict(range=[0, 100]))
-        st.plotly_chart(fig, width="stretch")
-
-    c1, c2 = st.columns([3, 2])
-    with c1.container(border=True):
-        st.markdown(f"**Top issues** · change vs previous {days} days")
-        ti = an.top_issues(cur, prev)
-        ti = ti[~is_noise(ti["issue"])]
-        ti["trend"] = ti["change_pct"].apply(lambda v: "new" if pd.isna(v) else ("▲ " if v > 0 else "▼ " if v < 0 else "= ") + f"{abs(v):.0f}%")
-        st.dataframe(ti[["issue", "mentions", "previous", "trend"]], hide_index=True, width="stretch",
-                     column_config={"mentions": st.column_config.ProgressColumn("Mentions", format="%d", min_value=0,
-                                                                                max_value=int(ti["mentions"].max() or 1)),
-                                    "previous": "Previous", "trend": "Change", "issue": "Issue"})
-    with c2.container(border=True):
-        st.markdown("**HDBSCAN cluster distribution**")
-        dist = classified(cur)["issue"].value_counts().reset_index()
-        dist.columns = ["issue", "reviews"]
-        noise_n = int(is_noise(cur["issue"]).sum())
-        if len(dist):
-            dist = dist.sort_values("reviews", ascending=True)
-            fig = px.bar(dist, x="reviews", y="issue", orientation="h", color="reviews",
-                         color_continuous_scale=["#E1F5EE", ACCENT], text="reviews")
-            fig.update_traces(textposition="outside", cliponaxis=False)
-            fig.update_layout(height=max(300, 34 * len(dist) + 50), margin=dict(l=0, r=18, t=10, b=0),
-                              coloraxis_showscale=False, xaxis_title="Reviews", yaxis_title=None)
-            st.plotly_chart(fig, width="stretch")
-        st.caption(f"{len(dist)} categories · {noise_n} reviews flagged as noise in this date range")
-
     with st.container(border=True):
         st.markdown("**Decision panel · Top 5 issues by priority**  \n"
                     "<span class='small'>Priority = 0.4 × frequency + 0.3 × negative share + 0.3 × low rating</span>",
