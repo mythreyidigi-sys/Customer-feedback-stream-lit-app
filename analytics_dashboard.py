@@ -1,18 +1,15 @@
-﻿"""Power BI-style analytics page for the Empathy Engine (rendered as screen 7 in main.py).
+﻿"""Power BI-style analytics page for the Empathy Engine (screen 1 in main.py).
 
-Reads the pipeline output outputs/reviews_with_issue_classification.xlsx (so it always reflects the latest
-scrape + pipeline run), scores sentiment with VADER and draws the dashboard charts.
+Works on the reviews already filtered by the sidebar, scores sentiment with VADER and draws the charts.
 """
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-CLASSIFIED = Path("outputs") / "reviews_with_issue_classification.xlsx"
 CHAIN_NAMES = {
     "a2b": "A2B (Adyar Ananda Bhavan)", "adyar": "A2B (Adyar Ananda Bhavan)",
     "vasant": "Vasantha Bhavan (Namma Veedu)", "namma": "Vasantha Bhavan (Namma Veedu)",
@@ -59,19 +56,23 @@ def price_perception(text: str) -> str:
     return "No price mention"
 
 
-@st.cache_data(show_spinner="Scoring sentiment…")
-def load_dashboard_data(path: str, modified: float) -> pd.DataFrame:
+@st.cache_data(show_spinner="Scoring sentiment?")
+def _vader_scores(texts: tuple[str, ...]) -> list[float]:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-    df = pd.read_excel(path)
     analyser = SentimentIntensityAnalyzer()
-    text = df["review"].fillna(df.get("review_text", "")).astype(str)
-    df["restaurant"] = df["restaurant"].map(chain_of)
-    df["source"] = df["source_file"].map(source_of)
-    df["sentiment_score"] = text.map(lambda t: analyser.polarity_scores(t)["compound"])
+    return [analyser.polarity_scores(t)["compound"] for t in texts]
+
+
+def prepare(df: pd.DataFrame) -> pd.DataFrame:
+    """Adapt the sidebar-filtered app reviews to the columns the dashboard charts use."""
+    df = df.copy()
+    text = df["text"].fillna("").astype(str)
+    df["review"] = text
+    df["predicted_issue_category"] = df["issue"]
+    df["sentiment_score"] = _vader_scores(tuple(text))
     df["segment"] = pd.cut(df["sentiment_score"], [-2, NEGATIVE_CUTOFF, POSITIVE_CUTOFF - 1e-9, 2],
-                           labels=["Detractor", "Neutral", "Promoter"])
-    df["segment"] = df["segment"].astype(str)
+                           labels=["Detractor", "Neutral", "Promoter"]).astype(str)
     df["price_perception"] = text.map(price_perception)
     df["text_for_cloud"] = text
     return df
@@ -91,31 +92,61 @@ def word_cloud(texts: pd.Series):
                      colormap="tab10", collocations=False).generate(words).to_image()
 
 
-def render(root: Path) -> None:
-    path = root / CLASSIFIED
-    if not path.is_file():
-        st.warning(f"Pipeline output not found: {path}. Run automation/run_pipeline.py first.")
-        return
-    df = load_dashboard_data(str(path), path.stat().st_mtime)
+def reputation_tab(df: pd.DataFrame, an) -> None:
+    """Reputation score per restaurant/branch/month and the issue clusters behind it."""
+    score = an.reputation_score(df)
+    neg = (df["sentiment"] == "negative").mean() * 100
+    top = df.loc[df["issue"] != an.POSITIVE_ISSUE, "issue"].value_counts()
+    kpi_row([("Reputation score (0-100)", f"{score:.1f}"), ("Reviews", f"{len(df):,}"),
+             ("Negative share", f"{neg:.1f}%"), ("Issue clusters", str(df["issue"].nunique())),
+             ("Biggest complaint cluster", top.index[0] if len(top) else "n/a")])
+    st.caption("Reputation score = 60% average rating (1-5 rescaled) + 40% net sentiment "
+               "(positive share ? negative share). Clusters come from Sentence-Transformer + HDBSCAN, labelled by LLM.")
+    c1, c2 = st.columns(2)
+    scores = pd.DataFrame([{"restaurant": r, "score": an.reputation_score(d), "reviews": len(d)}
+                           for r, d in df.groupby("restaurant")]).sort_values("score")
+    c1.markdown("**Reputation score by restaurant**")
+    c1.plotly_chart(px.bar(scores, y="restaurant", x="score", orientation="h", text="score", range_x=[0, 100])
+                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None), width="stretch")
+    trend = an.monthly_trend(df)
+    c2.markdown("**Reputation score by month**")
+    if len(trend):
+        c2.plotly_chart(px.line(trend, x="month", y="score", markers=True)
+                        .update_layout(margin=dict(t=10, b=10)), width="stretch")
+    cl = (df.groupby("issue").agg(reviews=("id", "size"), avg_sentiment=("sentiment_score", "mean"),
+                                  negative_pct=("sentiment", lambda s: (s == "negative").mean() * 100))
+          .reset_index().sort_values("reviews", ascending=False))
+    d1, d2 = st.columns(2)
+    d1.markdown("**Reviews per cluster**")
+    d1.plotly_chart(px.bar(cl, y="issue", x="reviews", orientation="h", color="negative_pct",
+                           color_continuous_scale="RdYlGn_r")
+                    .update_layout(margin=dict(t=10, b=10), yaxis={"categoryorder": "total ascending"},
+                                   yaxis_title=None), width="stretch")
+    d2.markdown("**Cluster profile**")
+    d2.dataframe(cl.round(2).rename(columns={"issue": "cluster"}), width="stretch", hide_index=True)
+    st.markdown("**Reputation by restaurant and branch**")
+    rows = [{"restaurant": r, "branch": b, "reviews": len(d), "score": an.reputation_score(d),
+             "negative_pct": round((d["sentiment"] == "negative").mean() * 100, 1)}
+            for (r, b), d in df.groupby(["restaurant", "branch"])]
+    st.dataframe(pd.DataFrame(rows).sort_values("score"), width="stretch", hide_index=True)
 
-    with st.expander("Filters", expanded=False):
-        f1, f2 = st.columns(2)
-        chosen_rest = f1.multiselect("Restaurants", sorted(df["restaurant"].unique()))
-        chosen_src = f2.multiselect("Sources", sorted(df["source"].unique()))
-    if chosen_rest:
-        df = df[df["restaurant"].isin(chosen_rest)]
-    if chosen_src:
-        df = df[df["source"].isin(chosen_src)]
+
+def render(df: pd.DataFrame, an) -> None:
+    """df is the sidebar-filtered review set from main.py (restaurant, branches, sources, date range)."""
     if df.empty:
-        st.info("No reviews match these filters.")
+        st.info("No reviews match the sidebar filters. Widen the date range or change filters in the sidebar.")
         return
+    df = prepare(df)
 
     st.caption("Sentiment = VADER compound score (−1 to +1) on each review. Promoter ≥ 0.5, Detractor ≤ 0, "
                "otherwise Neutral. Price perception is keyword-based.")
-    tab_overview, tab_issues, tab_segments = st.tabs(["Overview", "Issues & sentiment", "Segments & price"])
+    tab_rep, tab_overview, tab_issues, tab_segments = st.tabs(["Reputation scoring and clustering", "Overview", "Issues & sentiment", "Segments & price"])
 
     by_rest = df.groupby("restaurant").agg(reviews=("review", "size"), avg_sentiment=("sentiment_score", "mean"),
                                            branches=("branch", "nunique")).reset_index()
+
+    with tab_rep:
+        reputation_tab(df, an)
 
     with tab_overview:
         kpi_row([("Count of review", f"{len(df):,}"), ("Count of branch", f"{df['branch'].nunique():,}"),

@@ -72,8 +72,8 @@ db.init_db()
 
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
-PAGES = ["🔍 1. Search", "📊 2. Overview", "🚨 3. Early warning", "📣 4. Campaigns",
-         "📄 5. Monthly report", "🧭 6. SERVQUAL", "📈 7. Analytics"]
+PAGES = ["📈 1. Analytics", "🔍 2. Search", "📊 3. Overview", "🚨 4. Early warning", "📣 5. Campaigns",
+         "📄 6. Monthly report", "🧭 7. SERVQUAL"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -426,7 +426,7 @@ uploaded_review_focus = ss.pop("_uploaded_review_focus", None)
 uploaded_date_range = None
 if uploaded_review_focus:
     ss["restaurant"] = uploaded_review_focus["restaurant"]
-    ss["page"] = PAGES[1]
+    ss["page"] = PAGES[2]
     uploaded_date_range = uploaded_review_focus["date_range"]
 ss.setdefault("restaurant", "Geetham" if "Geetham" in restaurants else restaurants[0])
 ss["restaurant"] = canonical_chain_name(ss["restaurant"])
@@ -494,11 +494,11 @@ st.divider()
 
 
 def go_overview():
-    ss.page = PAGES[1]
+    ss.page = PAGES[2]
 
 
 # ================================================================== 1. SEARCH
-if page == PAGES[0]:
+if page == PAGES[1]:
     with st.container(border=True):
         st.caption("GETTING STARTED")
         st.markdown("## Add a batch of reviews")
@@ -528,7 +528,7 @@ if page == PAGES[0]:
         st.button("See the overview →", on_click=go_overview)
 
 # ================================================================== 2. OVERVIEW
-elif page == PAGES[1]:
+elif page == PAGES[2]:
     if cur.empty:
         st.info("No reviews in this date range. Widen the range or change filters in the sidebar.")
         st.stop()
@@ -641,7 +641,7 @@ elif page == PAGES[1]:
         st.download_button("Download CSV", show.to_csv(index=False).encode(), f"{ss.restaurant}_reviews.csv", "text/csv")
 
 # ================================================================== 3. EARLY WARNING (MODULE 6)
-elif page == PAGES[2]:
+elif page == PAGES[3]:
     st.markdown("**Module 6 · Reputation early-warning & resolution**  \n"
                 "<span class='small'>Spikes are flagged when an issue at a branch runs well above its 4-week average. "
                 "Reviews needing attention are listed most urgent first, each with a recommended fix and a drafted "
@@ -740,7 +740,7 @@ elif page == PAGES[2]:
                "is done by copying the reply to the platform (their reply APIs need business-account access).")
 
 # ================================================================== 4. CAMPAIGNS (360-DEGREE)
-elif page == PAGES[3]:
+elif page == PAGES[4]:
     st.markdown("**Digital marketing · 360-degree campaigns tied to issue clusters**  \n"
                 "<span class='small'>Each campaign answers one HDBSCAN cluster. Success is measured the same way the "
                 "issue was found: the cluster's share of classified reviews should fall on the next pipeline "
@@ -828,7 +828,7 @@ elif page == PAGES[3]:
                        "if a new complaint cluster appears after a re-run.")
 
 # ================================================================== 5. MONTHLY REPORT
-elif page == PAGES[4]:
+elif page == PAGES[5]:
     rest_all = df_all[df_all["restaurant"] == ss.restaurant]
     months = sorted(rest_all["review_date"].dt.to_period("M").astype(str).unique(), reverse=True)
     c1, c2 = st.columns([2, 1])
@@ -884,7 +884,7 @@ elif page == PAGES[4]:
         st.dataframe(past, hide_index=True, width="stretch")
 
 # ================================================================== 6. SERVQUAL
-elif page == PAGES[5]:
+elif page == PAGES[6]:
     st.markdown("**SERVQUAL · customer expectations versus perceived service**  \n"
                 "<span class='small'>A negative gap means perceived service fell short of expectations. "
                 "NLP complaint counts use the current restaurant, source and date filters.</span>",
@@ -985,6 +985,10 @@ elif page == PAGES[5]:
                 "Dimensions without mapped survey items remain unscored."
             )
 
-# ================================================================== 7. ANALYTICS
-elif page == PAGES[6]:
-    analytics_dashboard.render(_HERE)
+# ================================================================== 1. ANALYTICS
+elif page == PAGES[0]:
+    in_window = an.filter_reviews(df_all, sources=sources, start=cur_start, end=cur_end)
+    in_window = in_window[in_window["restaurant"].isin([ss.restaurant, *compare])]
+    if branches:
+        in_window = in_window[(in_window["restaurant"] != ss.restaurant) | in_window["branch"].isin(branches)]
+    analytics_dashboard.render(in_window, an)
