@@ -45,6 +45,7 @@ CHAIN_KEYWORDS = {
 }
 
 log = logging.getLogger("scraper")
+WINDOW_END = date.max  # newest review date to keep; set from --end
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -155,7 +156,9 @@ def scrape_google_place(page, url: str, chain: str, cutoff: date, max_reviews: i
     today = date.today()
     rows: dict[str, dict] = {}
     stagnant, last_count = 0, -1
-    while stagnant < 4 and len(rows) < max_reviews:
+    scrolls = 0
+    while stagnant < 4 and len(rows) < max_reviews and scrolls < 200:
+        scrolls += 1
         cards = page.evaluate(GOOGLE_CARD_JS)
         oldest = None
         for c in cards:
@@ -163,7 +166,7 @@ def scrape_google_place(page, url: str, chain: str, cutoff: date, max_reviews: i
             if d is None:
                 continue
             oldest = d if oldest is None else min(oldest, d)
-            if d >= cutoff and c["text"].strip():
+            if cutoff <= d <= WINDOW_END and c["text"].strip():
                 key = c["id"] or f'{d}|{c["text"][:60]}'
                 rows[key] = make_row(chain, branch, "Google", c["text"], parse_rating(c["rating"]), d)
         if oldest is not None and oldest < cutoff:
@@ -231,7 +234,7 @@ def parse_zomato_text(text: str, today: date) -> list[tuple[str, float | None, d
     return out
 
 
-def scrape_zomato_page(page, url: str, chain: str, branch: str, cutoff: date, max_scrolls: int = 60) -> list[dict]:
+def scrape_zomato_page(page, url: str, chain: str, branch: str, cutoff: date, max_scrolls: int = 150) -> list[dict]:
     base = url.rstrip("/")
     page.goto(base if base.endswith("/reviews") else base + "/reviews", timeout=60000)
     pause(4, 6)
@@ -248,7 +251,7 @@ def scrape_zomato_page(page, url: str, chain: str, branch: str, cutoff: date, ma
         parsed = parse_zomato_text(page.inner_text("body"), today)
         before = len(rows)
         for body, rating, d in parsed:
-            if d >= cutoff:
+            if cutoff <= d <= WINDOW_END:
                 rows[f"{d}|{body[:60]}"] = make_row(chain, branch, "Zomato", body, rating, d)
         if parsed and min(d for _, _, d in parsed) < cutoff:
             break
@@ -326,15 +329,20 @@ def scrape_tripadvisor_page(page, url: str, chain: str, branch: str, cutoff: dat
         cards = page.evaluate(TA_CARD_JS)
         if not cards:
             break
-        in_window = 0
+        oldest = None
         for card in cards:
             parsed = parse_ta_card(card, today)
-            if parsed and parsed[2] >= cutoff:
-                body, rating, d = parsed
+            if not parsed:
+                continue
+            body, rating, d = parsed
+            oldest = d if oldest is None else min(oldest, d)
+            if cutoff <= d <= WINDOW_END:
                 rows[f"{d}|{body[:60]}"] = make_row(chain, branch, "TripAdvisor", body, rating, d)
-                in_window += 1
-        empty_pages = empty_pages + 1 if in_window == 0 else 0
-        if empty_pages >= 2:
+        if oldest is None:
+            empty_pages += 1
+            if empty_pages >= 2:
+                break
+        elif oldest < cutoff:
             break
     log.info("TripAdvisor | %s | %s -> %d reviews", chain, branch, len(rows))
     return list(rows.values())
@@ -363,12 +371,16 @@ def save(rows: list[dict], source: str, chain: str, run_day: date) -> int:
     return len(df)
 
 
-def run(sources: list[str], chains: list[str] | None, months: int, headless: bool, max_reviews: int) -> int:
+def run(sources: list[str], chains: list[str] | None, months: int, headless: bool, max_reviews: int,
+        start: date | None = None, end: date | None = None) -> int:
     from playwright.sync_api import sync_playwright
 
+    global WINDOW_END
+    WINDOW_END = end or date.max
+
     targets = json.loads(TARGETS_FILE.read_text(encoding="utf-8"))["chains"]
-    cutoff = date.today() - timedelta(days=round(months * 30.4))
-    log.info("Collecting reviews dated on/after %s from %s", cutoff, ", ".join(sources))
+    cutoff = start or date.today() - timedelta(days=round(months * 30.4))
+    log.info("Collecting reviews dated %s to %s from %s", cutoff, WINDOW_END, ", ".join(sources))
     total = 0
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, args=["--disable-blink-features=AutomationControlled"])
@@ -403,11 +415,14 @@ def main(argv=None) -> int:
     ap.add_argument("--sources", nargs="+", choices=list(SOURCES), default=list(SOURCES))
     ap.add_argument("--chains", nargs="+", help="chain names exactly as in targets.json (default: all)")
     ap.add_argument("--months", type=int, default=6)
+    ap.add_argument("--start", type=date.fromisoformat, help="oldest review date, YYYY-MM-DD (overrides --months)")
+    ap.add_argument("--end", type=date.fromisoformat, help="newest review date, YYYY-MM-DD (default: today)")
     ap.add_argument("--max-reviews", type=int, default=400, help="cap per Google place")
     ap.add_argument("--headful", action="store_true", help="show the browser window (useful for captchas)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    return 0 if run(args.sources, args.chains, args.months, not args.headful, args.max_reviews) > 0 else 1
+    return 0 if run(args.sources, args.chains, args.months, not args.headful, args.max_reviews,
+               args.start, args.end) > 0 else 1
 
 
 if __name__ == "__main__":

@@ -10,23 +10,70 @@
         "Adyar Ananda Bhavan Tiruchirappalli"
       ],
       "zomato": [
-        {"branch": "Adyar", "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-adyar"},
-        {"branch": "T Nagar", "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-1-t-nagar"},
-        {"branch": "Triplicane", "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-triplicane"},
-        {"branch": "GST Road", "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-gst-road"},
-        {"branch": "Avadi", "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-avadi"},
-        {"branch": "Potheri", "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-potheri"}
+        {
+          "branch": "Adyar",
+          "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-adyar"
+        },
+        {
+          "branch": "T Nagar",
+          "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-1-t-nagar"
+        },
+        {
+          "branch": "Triplicane",
+          "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-triplicane"
+        },
+        {
+          "branch": "GST Road",
+          "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-gst-road"
+        },
+        {
+          "branch": "Avadi",
+          "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-avadi"
+        },
+        {
+          "branch": "Potheri",
+          "url": "https://www.zomato.com/chennai/a2b-adyar-ananda-bhavan-potheri"
+        }
       ],
       "tripadvisor": [
-        {"branch": "Chennai", "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d10483566-Reviews-A2B_Adyar_Anandha_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"},
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d5897521-Reviews-Adyar_Ananda_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"},
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d8409941-Reviews-Adyar_Ananda_Bhavan_A2B_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"}
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d10483566-Reviews-A2B_Adyar_Anandha_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d5897521-Reviews-Adyar_Ananda_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d8409941-Reviews-Adyar_Ananda_Bhavan_A2B_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        }
       ]
     },
     "Geetham": {
-      "google": ["Geetham Veg Restaurant Chennai"],
-      "zomato": [],
-      "tripadvisor": []
+      "google": [
+        "Geetham Veg Restaurant Chennai"
+      ],
+      "zomato": [
+        {
+          "branch": "Thiruverkadu",
+          "url": "https://www.zomato.com/chennai/geetham-veg-restaurant-thiruverkadu"
+        },
+        {
+          "branch": "Pallikaranai",
+          "url": "https://www.zomato.com/chennai/geetham-veg-restaurant-pallikaranai"
+        }
+      ],
+      "tripadvisor": [
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d7742456-Reviews-Geetham_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d27106440-Reviews-Geetham_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        }
+      ]
     },
     "Namma Veedu Vasantha Bhavan": {
       "google": [
@@ -37,40 +84,112 @@
         "Namma Veedu Vasanta Bhavan Velachery",
         "Namma Veedu Vasanta Bhavan Anna Nagar"
       ],
-      "zomato": [],
+      "zomato": [
+        {
+          "branch": "Egmore",
+          "url": "https://www.zomato.com/chennai/namma-veedu-vasanta-bhavan-egmore"
+        }
+      ],
       "tripadvisor": [
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d7941570-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"}
+        {
+          "branch": "Egmore",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d5057776-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Phoenix Market City",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d5922575-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Vadapalani",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d7892725-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d5914193-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d7941570-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.in/Restaurant_Review-g304556-d7941569-Reviews-Namma_Veedu_Vasanta_Bhavan-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        }
       ]
     },
     "Sangeetha": {
-      "google": ["Sangeetha Veg Restaurant Chennai"],
+      "google": [
+        "Sangeetha Veg Restaurant Chennai"
+      ],
       "zomato": [
-        {"branch": "Santhome", "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-santhome"},
-        {"branch": "Thousand Lights", "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-thousand-lights"},
-        {"branch": "T Nagar", "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-t-nagar"},
-        {"branch": "Adyar", "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-adyar"}
+        {
+          "branch": "Santhome",
+          "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-santhome"
+        },
+        {
+          "branch": "Thousand Lights",
+          "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-thousand-lights"
+        },
+        {
+          "branch": "T Nagar",
+          "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-t-nagar"
+        },
+        {
+          "branch": "Adyar",
+          "url": "https://www.zomato.com/chennai/sangeetha-veg-restaurant-adyar"
+        }
       ],
       "tripadvisor": [
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d5993544-Reviews-Sangeetha_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"},
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d3534743-Reviews-Sangeetha_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"},
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d5909728-Reviews-Sangeetha_Vegetarian_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"}
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d5993544-Reviews-Sangeetha_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d3534743-Reviews-Sangeetha_Veg_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        },
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d5909728-Reviews-Sangeetha_Vegetarian_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        }
       ]
     },
     "Saravana Bhavan": {
-      "google": ["Saravana Bhavan Chennai", "Saravana Bhavan Coimbatore"],
+      "google": [
+        "Saravana Bhavan Chennai",
+        "Saravana Bhavan Coimbatore"
+      ],
       "zomato": [],
       "tripadvisor": []
     },
     "Sree Annapoorna": {
-      "google": ["Sree Annapoorna Chennai", "Sree Annapoorna Coimbatore"],
+      "google": [
+        "Sree Annapoorna Chennai",
+        "Sree Annapoorna Coimbatore"
+      ],
       "zomato": [
-        {"branch": "Semmancheri", "url": "https://www.zomato.com/chennai/chennai-sri-annapoorna-semmancheri"},
-        {"branch": "Tambaram", "url": "https://www.zomato.com/chennai/sri-annapoorna-tambaram"},
-        {"branch": "Madipakkam", "url": "https://www.zomato.com/chennai/sri-annapoorna-madipakkam"},
-        {"branch": "Adambakkam", "url": "https://www.zomato.com/chennai/sree-annapoorna-cafe-adambakkam"}
+        {
+          "branch": "Semmancheri",
+          "url": "https://www.zomato.com/chennai/chennai-sri-annapoorna-semmancheri"
+        },
+        {
+          "branch": "Tambaram",
+          "url": "https://www.zomato.com/chennai/sri-annapoorna-tambaram"
+        },
+        {
+          "branch": "Madipakkam",
+          "url": "https://www.zomato.com/chennai/sri-annapoorna-madipakkam"
+        },
+        {
+          "branch": "Adambakkam",
+          "url": "https://www.zomato.com/chennai/sree-annapoorna-cafe-adambakkam"
+        }
       ],
       "tripadvisor": [
-        {"branch": "Chennai", "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d8734870-Reviews-Hotel_Sri_Annapoorna_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"}
+        {
+          "branch": "Chennai",
+          "url": "https://www.tripadvisor.com/Restaurant_Review-g304556-d8734870-Reviews-Hotel_Sri_Annapoorna_Restaurant-Chennai_Madras_Chennai_District_Tamil_Nadu.html"
+        }
       ]
     }
   }
