@@ -83,7 +83,10 @@ PAGES = ["🔍 1. Search", "📈 2. Analytics", "📊 3. Overview", "🚨 4. Ear
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
 # numbers in the app always come from the database).
-NOISE_LABELS = {"noise", "unclassified", "uncategorized", "uncategorised", "outlier", "-1", "other", ""}
+# "Brand Reputation & Customer Satisfaction" is the catch-all for unhappy-but-unspecific reviews and names no
+# fixable problem, so it is hidden from cluster views like noise.
+NOISE_LABELS = {"noise", "unclassified", "uncategorized", "uncategorised", "outlier", "-1", "other", "",
+                "brand reputation & customer satisfaction"}
 
 # ------------------------------------------------------------------ Module 5 aspects
 ASPECTS = {

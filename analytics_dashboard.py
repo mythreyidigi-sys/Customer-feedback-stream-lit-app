@@ -17,7 +17,8 @@ CHAIN_NAMES = {
     "annapurna": "Sree Annapoorna", "sree": "Sree Annapoorna", "sri ": "Sree Annapoorna",
 }
 POSITIVE_CUTOFF, NEGATIVE_CUTOFF = 0.5, 0.0
-NOISE_LABELS = {"noise", "unclassified", "uncategorized", "uncategorised", "outlier", "-1", "other", ""}
+NOISE_LABELS = {"noise", "unclassified", "uncategorized", "uncategorised", "outlier", "-1", "other", "",
+                "brand reputation & customer satisfaction"}
 OVERPRICED = re.compile(r"over\s?priced|too (?:expensive|costly|pricey)|very (?:expensive|costly|pricey)|"
                         r"costly|expensive|not worth|waste of money|rip[- ]?off|high price|highly priced|"
                         r"price(?:s)? (?:is|are) (?:high|steep)", re.I)
@@ -70,7 +71,8 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     text = df["text"].fillna("").astype(str)
     df["review"] = text
-    df["predicted_issue_category"] = df["issue"]
+    df["predicted_issue_category"] = df["issue"].where(
+        ~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS))
     df["sentiment_score"] = _vader_scores(tuple(text))
     df["segment"] = pd.cut(df["sentiment_score"], [-2, NEGATIVE_CUTOFF, POSITIVE_CUTOFF - 1e-9, 2],
                            labels=["Detractor", "Neutral", "Promoter"]).astype(str)
@@ -112,11 +114,12 @@ def top_issues_table(ctx: dict) -> None:
 
 def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """Reputation score per restaurant/branch/month and the issue clusters behind it."""
+    clustered = df[~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
     score = an.reputation_score(df)
     neg = (df["sentiment"] == "negative").mean() * 100
-    top = df.loc[df["issue"] != an.POSITIVE_ISSUE, "issue"].value_counts()
+    top = clustered.loc[clustered["issue"] != an.POSITIVE_ISSUE, "issue"].value_counts()
     kpi_row([("Reputation score (0-100)", f"{score:.1f}"), ("Reviews", f"{len(df):,}"),
-             ("Negative share", f"{neg:.1f}%"), ("Issue clusters", str(df["issue"].nunique())),
+             ("Negative share", f"{neg:.1f}%"), ("Issue clusters", str(clustered["issue"].nunique())),
              ("Biggest complaint cluster", top.index[0] if len(top) else "n/a")])
     st.caption("Reputation score = 60% average rating (1-5 rescaled) + 40% net sentiment "
                "(positive share − negative share). Clusters come from Sentence-Transformer + HDBSCAN, labelled by LLM.")
@@ -131,7 +134,7 @@ def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     if len(trend):
         c2.plotly_chart(px.line(trend, x="month", y="score", markers=True)
                         .update_layout(margin=dict(t=10, b=10)), width="stretch")
-    cl = df.groupby("issue").agg(reviews=("id", "size"), negative_pct=("sentiment", lambda s: (s == "negative").mean() * 100)).reset_index()
+    cl = clustered.groupby("issue").agg(reviews=("id", "size"), negative_pct=("sentiment", lambda s: (s == "negative").mean() * 100)).reset_index()
     d1, d2 = st.columns(2)
     d1.markdown("**Reviews per cluster**")
     d1.plotly_chart(px.bar(cl, y="issue", x="reviews", orientation="h", color="negative_pct",

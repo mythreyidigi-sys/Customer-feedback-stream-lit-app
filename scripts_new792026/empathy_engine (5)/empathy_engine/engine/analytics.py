@@ -141,6 +141,12 @@ def competitor_scores(df, restaurants, start, end):
     return pd.DataFrame(rows).sort_values("score", ascending=False, na_position="last")
 
 
+def _top_complaint(d):
+    """Most common specific complaint; the vague catch-all cluster is skipped."""
+    ok = d["issue"].isin([POSITIVE_ISSUE, "Brand Reputation & Customer Satisfaction"])
+    return d.loc[~ok, "issue"].mode().iat[0] if (~ok).any() else "-"
+
+
 def branch_table(cur):
     if cur.empty:
         return pd.DataFrame()
@@ -150,8 +156,7 @@ def branch_table(cur):
         "avg_rating": g["rating"].mean().round(2),
         "negative_pct": (g["sentiment"].apply(lambda s: (s == "negative").mean()) * 100).round(1),
         "score": g.apply(reputation_score, include_groups=False),
-        "top_complaint": g.apply(lambda d: d.loc[d["issue"] != POSITIVE_ISSUE, "issue"].mode().iat[0]
-                                 if (d["issue"] != POSITIVE_ISSUE).any() else "-", include_groups=False),
+        "top_complaint": g.apply(lambda d: _top_complaint(d), include_groups=False),
     })
     return t.sort_values("score").reset_index()
 
