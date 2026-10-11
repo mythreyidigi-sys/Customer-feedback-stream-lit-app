@@ -171,33 +171,19 @@ def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
         kpi_row([("Count of review", f"{len(df):,}"), ("Count of branch", f"{df['branch'].nunique():,}"),
                  ("Count of restaurant", str(df["restaurant"].nunique())),
                  ("Count of source", str(df["source"].nunique()))])
-        c1, c2, c3 = st.columns([1.2, 1.4, 1.2])
+        c1, c2, c3 = st.columns([1.2, 1.2, 1.4])
         c1.markdown("**Count of review by restaurant**")
         c1.plotly_chart(px.bar(by_rest.sort_values("reviews", ascending=False), x="restaurant", y="reviews")
                         .update_layout(margin=dict(t=10, b=10), xaxis_title=None), width="stretch")
-        c2.markdown("**Count of review by restaurant and source**")
-        rs = df.groupby(["restaurant", "source"]).size().reset_index(name="reviews")
-        c2.plotly_chart(px.bar(rs, y="restaurant", x="reviews", color="source", orientation="h")
-                        .update_layout(margin=dict(t=10, b=10), yaxis_title=None,
-                                       yaxis={"categoryorder": "total ascending"}), width="stretch")
-        c3.markdown("**Avg sentiment by restaurant**")
-        c3.plotly_chart(px.bar(by_rest.sort_values("avg_sentiment"), y="restaurant", x="avg_sentiment",
-                               orientation="h").update_layout(margin=dict(t=10, b=10), yaxis_title=None),
-                        width="stretch")
-        d1, d2, d3 = st.columns([1.2, 1.4, 1.2])
-        d1.markdown("**Count of review by source**")
+        c2.markdown("**Count of review by source**")
         src = df["source"].value_counts().rename_axis("source").reset_index(name="reviews")
-        d1.plotly_chart(px.bar(src, y="source", x="reviews", orientation="h")
+        c2.plotly_chart(px.bar(src, y="source", x="reviews", orientation="h")
                         .update_layout(margin=dict(t=10, b=10), yaxis_title=None), width="stretch")
-        d2.markdown("**Reviews per restaurant**")
-        table = by_rest.set_index("restaurant")[["reviews"]].sort_values("reviews", ascending=False)
-        table.loc["Total"] = table["reviews"].sum()
-        d2.dataframe(table, width="stretch")
-        d3.markdown("**Most-used words**")
+        c3.markdown("**Most-used words**")
         try:
-            d3.image(word_cloud(df["text_for_cloud"]), width="stretch")
+            c3.image(word_cloud(df["text_for_cloud"]), width="stretch")
         except ImportError:
-            d3.info("Install the 'wordcloud' package to show the word cloud.")
+            c3.info("Install the 'wordcloud' package to show the word cloud.")
 
     with tab_issues:
         top = (df["predicted_issue_category"].value_counts().head(1).index[0]
