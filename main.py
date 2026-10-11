@@ -66,7 +66,11 @@ from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
 from engine.report import build_report, save_report
 from clean_reviews import OUTPUT_FILE as CLEANED_REVIEWS_OUTPUT, clean_reviews_dataframe
+import importlib
+
 import analytics_dashboard
+
+importlib.reload(analytics_dashboard)   # hosted Streamlit can keep a stale copy of this module after a redeploy
 
 st.set_page_config(page_title="Empathy Engine", page_icon="💬", layout="wide")
 db.init_db()
