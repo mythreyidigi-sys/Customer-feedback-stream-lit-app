@@ -14,11 +14,12 @@ Pipeline (final dataset: 6 chains x 3 platforms = 18 combinations):
       -> SQLite (empathy.db: reviews, actions, reports, runs)
       -> Streamlit app:
            1. Search            upload and import review files
-           2. Overview          KPIs, top issues, priority decision panel
-           3. Early warning     Module 6 - reputation early-warning & resolution
-           4. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
-           5. Monthly report    PDF summary for managers
-           6. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
+           2. Analytics         reputation scoring, clustering, sentiment and segment charts
+           3. Overview          KPIs, top issues, priority decision panel
+           4. Early warning     Module 6 - reputation early-warning & resolution
+           5. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
+           6. Monthly report    PDF summary for managers
+           7. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
 
 Setup:
     pip install -r requirements.txt
@@ -72,7 +73,7 @@ db.init_db()
 
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
-PAGES = ["📈 1. Analytics", "🔍 2. Search", "📊 3. Overview", "🚨 4. Early warning", "📣 5. Campaigns",
+PAGES = ["🔍 1. Search", "📈 2. Analytics", "📊 3. Overview", "🚨 4. Early warning", "📣 5. Campaigns",
          "📄 6. Monthly report", "🧭 7. SERVQUAL"]
 
 # ------------------------------------------------------------------ project reference figures
@@ -498,7 +499,7 @@ def go_overview():
 
 
 # ================================================================== 1. SEARCH
-if page == PAGES[1]:
+if page == PAGES[0]:
     with st.container(border=True):
         st.caption("GETTING STARTED")
         st.markdown("## Add a batch of reviews")
@@ -985,8 +986,8 @@ elif page == PAGES[6]:
                 "Dimensions without mapped survey items remain unscored."
             )
 
-# ================================================================== 1. ANALYTICS
-elif page == PAGES[0]:
+# ================================================================== 2. ANALYTICS
+elif page == PAGES[1]:
     in_window = an.filter_reviews(df_all, sources=sources, start=cur_start, end=cur_end)
     in_window = in_window[in_window["restaurant"].isin([ss.restaurant, *compare])]
     if branches:
