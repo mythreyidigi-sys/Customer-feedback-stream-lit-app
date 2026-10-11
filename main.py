@@ -592,12 +592,6 @@ elif page == PAGES[2]:
         fig.update_layout(height=260, showlegend=False, margin=dict(l=0, r=0, t=10, b=0), yaxis_title=None)
         st.plotly_chart(fig, width="stretch")
 
-    with st.container(border=True):
-        st.markdown("**Branches** · lowest reputation first")
-        st.dataframe(an.branch_table(cur), hide_index=True, width="stretch",
-                     column_config={"score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
-                                    "negative_pct": st.column_config.NumberColumn("Negative %", format="%.1f")})
-
     with st.expander("Read the reviews in this date range"):
         q = st.text_input("Search text", placeholder="e.g. sambar, parking, rude")
         show = cur if not q else cur[cur["text"].str.contains(q, case=False, na=False)]
