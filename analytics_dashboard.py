@@ -17,6 +17,7 @@ CHAIN_NAMES = {
     "annapurna": "Sree Annapoorna", "sree": "Sree Annapoorna", "sri ": "Sree Annapoorna",
 }
 POSITIVE_CUTOFF, NEGATIVE_CUTOFF = 0.5, 0.0
+NOISE_LABELS = {"noise", "unclassified", "uncategorized", "uncategorised", "outlier", "-1", "other", ""}
 OVERPRICED = re.compile(r"over\s?priced|too (?:expensive|costly|pricey)|very (?:expensive|costly|pricey)|"
                         r"costly|expensive|not worth|waste of money|rip[- ]?off|high price|highly priced|"
                         r"price(?:s)? (?:is|are) (?:high|steep)", re.I)
@@ -92,7 +93,24 @@ def word_cloud(texts: pd.Series):
                      colormap="tab10", collocations=False).generate(words).to_image()
 
 
-def reputation_tab(df: pd.DataFrame, an) -> None:
+def top_issues_table(ctx: dict) -> None:
+    """Top issues for the selected restaurant, with mentions and change vs the previous window."""
+    an, cur, prev = ctx["an"], ctx["cur"], ctx["prev"]
+    st.markdown(f"**Top issues ? {ctx['restaurant']}** ? change vs previous {ctx['days']} days")
+    ti = an.top_issues(cur, prev)
+    ti = ti[~ti["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
+    if ti.empty:
+        st.info("No issues in this date range.")
+        return
+    ti["trend"] = ti["change_pct"].apply(
+        lambda v: "new" if pd.isna(v) else ("▲ " if v > 0 else "▼ " if v < 0 else "= ") + f"{abs(v):.0f}%")
+    st.dataframe(ti[["issue", "mentions", "previous", "trend"]], hide_index=True, width="stretch",
+                 column_config={"mentions": st.column_config.ProgressColumn(
+                     "Mentions", format="%d", min_value=0, max_value=int(ti["mentions"].max() or 1)),
+                     "previous": "Previous", "trend": "Change", "issue": "Issue"})
+
+
+def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """Reputation score per restaurant/branch/month and the issue clusters behind it."""
     score = an.reputation_score(df)
     neg = (df["sentiment"] == "negative").mean() * 100
@@ -101,7 +119,7 @@ def reputation_tab(df: pd.DataFrame, an) -> None:
              ("Negative share", f"{neg:.1f}%"), ("Issue clusters", str(df["issue"].nunique())),
              ("Biggest complaint cluster", top.index[0] if len(top) else "n/a")])
     st.caption("Reputation score = 60% average rating (1-5 rescaled) + 40% net sentiment "
-               "(positive share ? negative share). Clusters come from Sentence-Transformer + HDBSCAN, labelled by LLM.")
+               "(positive share − negative share). Clusters come from Sentence-Transformer + HDBSCAN, labelled by LLM.")
     c1, c2 = st.columns(2)
     scores = pd.DataFrame([{"restaurant": r, "score": an.reputation_score(d), "reviews": len(d)}
                            for r, d in df.groupby("restaurant")]).sort_values("score")
@@ -113,17 +131,15 @@ def reputation_tab(df: pd.DataFrame, an) -> None:
     if len(trend):
         c2.plotly_chart(px.line(trend, x="month", y="score", markers=True)
                         .update_layout(margin=dict(t=10, b=10)), width="stretch")
-    cl = (df.groupby("issue").agg(reviews=("id", "size"), avg_sentiment=("sentiment_score", "mean"),
-                                  negative_pct=("sentiment", lambda s: (s == "negative").mean() * 100))
-          .reset_index().sort_values("reviews", ascending=False))
+    cl = df.groupby("issue").agg(reviews=("id", "size"), negative_pct=("sentiment", lambda s: (s == "negative").mean() * 100)).reset_index()
     d1, d2 = st.columns(2)
     d1.markdown("**Reviews per cluster**")
     d1.plotly_chart(px.bar(cl, y="issue", x="reviews", orientation="h", color="negative_pct",
                            color_continuous_scale="RdYlGn_r")
                     .update_layout(margin=dict(t=10, b=10), yaxis={"categoryorder": "total ascending"},
                                    yaxis_title=None), width="stretch")
-    d2.markdown("**Cluster profile**")
-    d2.dataframe(cl.round(2).rename(columns={"issue": "cluster"}), width="stretch", hide_index=True)
+    with d2.container(border=True):
+        top_issues_table(issues_ctx)
     st.markdown("**Reputation by restaurant and branch**")
     rows = [{"restaurant": r, "branch": b, "reviews": len(d), "score": an.reputation_score(d),
              "negative_pct": round((d["sentiment"] == "negative").mean() * 100, 1)}
@@ -131,7 +147,7 @@ def reputation_tab(df: pd.DataFrame, an) -> None:
     st.dataframe(pd.DataFrame(rows).sort_values("score"), width="stretch", hide_index=True)
 
 
-def render(df: pd.DataFrame, an) -> None:
+def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """df is the sidebar-filtered review set from main.py (restaurant, branches, sources, date range)."""
     if df.empty:
         st.info("No reviews match the sidebar filters. Widen the date range or change filters in the sidebar.")
@@ -146,7 +162,7 @@ def render(df: pd.DataFrame, an) -> None:
                                            branches=("branch", "nunique")).reset_index()
 
     with tab_rep:
-        reputation_tab(df, an)
+        reputation_tab(df, an, issues_ctx)
 
     with tab_overview:
         kpi_row([("Count of review", f"{len(df):,}"), ("Count of branch", f"{df['branch'].nunique():,}"),

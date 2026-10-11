@@ -992,4 +992,4 @@ elif page == PAGES[1]:
     in_window = in_window[in_window["restaurant"].isin([ss.restaurant, *compare])]
     if branches:
         in_window = in_window[(in_window["restaurant"] != ss.restaurant) | in_window["branch"].isin(branches)]
-    analytics_dashboard.render(in_window, an)
+    analytics_dashboard.render(in_window, an, {"an": an, "cur": cur, "prev": prev, "restaurant": ss.restaurant, "days": days})
