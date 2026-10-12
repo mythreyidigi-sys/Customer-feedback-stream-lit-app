@@ -1,0 +1,22 @@
+{
+  "db": "C:\\2026 MBA\\Project\\Customer-feedback-stream-lit-app.git\\scripts_new792026\\empathy_engine (5)\\empathy_engine\\data\\empathy.db",
+  "reviews": 1819,
+  "panel_rows": 44,
+  "train_rows": 25,
+  "test_rows": 19,
+  "issues": [
+    "Ambience & Location",
+    "Brand Reputation & Customer Satisfaction",
+    "Food Quality & Branch Consistency",
+    "Food Quantity & Value for Money",
+    "Food Variety & Fast Service",
+    "Poor Experience / Hygiene Complaints",
+    "Pricing & Staff Performance",
+    "Service Quality",
+    "Slow Service & Staff Negligence"
+  ],
+  "xgb_auc": 0.2444444444444444,
+  "best_baseline_auc": 0.6944444444444444,
+  "xgb_beats_baselines": false,
+  "any_supported_issue": false
+}

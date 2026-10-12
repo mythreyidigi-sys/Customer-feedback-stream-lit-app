@@ -78,7 +78,7 @@ db.init_db()
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
 PAGES = ["🔍 1. Search", "📈 2. Analytics", "📊 3. Overview", "🚨 4. Early warning", "📣 5. Campaigns",
-         "📄 6. Monthly report", "🧭 7. SERVQUAL"]
+         "📄 6. Monthly report", "🧭 7. SERVQUAL", "🎯 8. Issue priority"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -959,3 +959,40 @@ elif page == PAGES[1]:
     if branches:
         in_window = in_window[(in_window["restaurant"] != ss.restaurant) | in_window["branch"].isin(branches)]
     analytics_dashboard.render(in_window, an, {"an": an, "cur": cur, "prev": prev, "restaurant": ss.restaurant, "days": days})
+
+# ================================================================== 8. ISSUE PRIORITY (XGBoost)
+elif page == PAGES[7]:
+    import json as _json
+    _xdir = _HERE / "outputs" / "xgb_priority"
+    st.markdown("**Issue priority · XGBoost sentiment-decline risk by complaint category**")
+    if not (_xdir / "priority_ranking.csv").is_file():
+        st.warning("No model outputs yet. Run `python issue_priority_model.py` to train and evaluate.")
+    else:
+        _sum = _json.loads((_xdir / "run_summary.json").read_text())
+        _ev = pd.read_csv(_xdir / "evaluation.csv")
+        _rk = pd.read_csv(_xdir / "priority_ranking.csv")
+        st.warning(
+            "The dataset has **no star ratings**, so rating decline cannot be predicted. The target is a proxy: "
+            "the mean VADER sentiment of a restaurant × source falls from one month to the next. "
+            f"Panel: {_sum['panel_rows']} unit-months (train {_sum['train_rows']}, test {_sum['test_rows']}), "
+            "so results are exploratory.")
+        if not _sum["xgb_beats_baselines"]:
+            st.error(f"XGBoost (AUC {_sum['xgb_auc']:.2f}) did not beat the best baseline "
+                     f"(AUC {_sum['best_baseline_auc']:.2f}) on the held-out period; treat the model ranking as "
+                     "unvalidated and use the observed decline rates as the rule-based priority.")
+        st.markdown("**Baseline versus XGBoost (held-out later months)**")
+        st.dataframe(_ev.drop(columns=["train_rows", "test_rows"]), hide_index=True, width="stretch")
+        st.markdown("**Priority ranking** (change in predicted decline risk per +10pp share of the category)")
+        _rk["observed_lift_pp"] = (_rk["observed_decline_rate_high_share"] - _rk["observed_decline_rate_low_share"]) * 100
+        st.dataframe(_rk, hide_index=True, width="stretch", column_config={
+            "avg_risk_uplift_pp": st.column_config.NumberColumn("Risk uplift (pp)", format="%.2f"),
+            "ci_low_pp": st.column_config.NumberColumn("CI low", format="%.2f"),
+            "ci_high_pp": st.column_config.NumberColumn("CI high", format="%.2f"),
+            "observed_decline_rate_high_share": st.column_config.NumberColumn("Decline rate (high share)", format="%.2f"),
+            "observed_decline_rate_low_share": st.column_config.NumberColumn("Decline rate (low share)", format="%.2f"),
+            "observed_lift_pp": st.column_config.NumberColumn("Observed lift (pp)", format="%.1f"),
+            "mean_share": st.column_config.NumberColumn("Mean share", format="%.3f")})
+        st.caption("Interval = 95% over bootstrap refits of the model. 'Inconclusive' means the interval spans 0. "
+                   "Target definition and features: outputs/xgb_priority/target_definition.md.")
+        with st.expander("Data audit"):
+            st.dataframe(pd.read_csv(_xdir / "data_audit.csv"), hide_index=True, width="stretch")

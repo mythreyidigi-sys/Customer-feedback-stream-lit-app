@@ -1,0 +1,33 @@
+{
+  "numeric": [
+    "n_reviews",
+    "sent_mean",
+    "neg_share",
+    "complaint_share",
+    "share__Ambience & Location",
+    "share__Brand Reputation & Customer Satisfaction",
+    "share__Food Quality & Branch Consistency",
+    "share__Food Quantity & Value for Money",
+    "share__Food Variety & Fast Service",
+    "share__Poor Experience / Hygiene Complaints",
+    "share__Pricing & Staff Performance",
+    "share__Service Quality",
+    "share__Slow Service & Staff Negligence"
+  ],
+  "categorical": [
+    "restaurant",
+    "source"
+  ],
+  "issues": [
+    "Ambience & Location",
+    "Brand Reputation & Customer Satisfaction",
+    "Food Quality & Branch Consistency",
+    "Food Quantity & Value for Money",
+    "Food Variety & Fast Service",
+    "Poor Experience / Hygiene Complaints",
+    "Pricing & Staff Performance",
+    "Service Quality",
+    "Slow Service & Staff Negligence"
+  ],
+  "target": "target_decline"
+}

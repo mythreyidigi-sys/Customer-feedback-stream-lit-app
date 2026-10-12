@@ -15,3 +15,4 @@ wordcloud
 playwright
 python-dateutil
 schedule
+xgboost>=2.0

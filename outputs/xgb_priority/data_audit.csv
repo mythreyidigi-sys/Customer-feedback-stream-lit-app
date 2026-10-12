@@ -1,0 +1,9 @@
+column,present,non_null,rows,note
+text,True,1819,1819,
+rating,True,0,1819,"Empty - no star ratings were captured, so rating decline cannot be modelled."
+issue,True,1819,1819,"Present; produced by the classifier (issue_source=classifier), not human-coded."
+sentiment,True,1819,1819,Present; deterministic link to issue labels - not used as a feature (leakage).
+branch,True,1819,1819,40 distinct values; some are scraped file names - too noisy to be a unit.
+restaurant,True,1819,1819,
+review_date,True,1819,1819,Present; Google dates derive from relative text so month-level only.
+collected_at,False,0,1819,"Not stored; only imported_at (import time) exists, which is not a review attribute."
