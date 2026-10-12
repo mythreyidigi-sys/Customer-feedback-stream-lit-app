@@ -620,6 +620,42 @@ elif page == PAGES[3]:
         else:
             st.success("No spikes this week.", icon="✅")
 
+    with st.container(border=True):
+        import spike_detection as _sd
+        st.markdown("**Spike detector comparison** · existing threshold rule vs Z-score")
+        _lv = st.radio("Group complaints by", ["issue", "restaurant", "branch"], horizontal=True,
+                       format_func={"issue": "Issue category", "restaurant": "Restaurant × issue",
+                                    "branch": "Branch × issue"}.get, key="spike_level")
+        _al = _sd.current_alerts(upto, as_of, _lv)
+        _cmp = _sd.comparison(upto, as_of, _lv)
+        st.caption(
+            f"Negative, non-positive-issue reviews per 7 days ending {pd.Timestamp(as_of).date()}. "
+            f"**Threshold**: ≥ {_sd.MIN_COUNT} reviews and ≥ {_sd.RATIO_THRESHOLD:g}× the 4-week average "
+            f"(baseline floored at 1/week). **Z-score**: ≥ {_sd.MIN_COUNT} reviews and Z ≥ {_sd.Z_THRESHOLD:g} "
+            f"against the previous {_sd.Z_HISTORY_WEEKS} weeks (needs ≥ {_sd.Z_MIN_HISTORY} weeks of history; "
+            "otherwise shown as pending, never zero-filled before the first review date).")
+        if _al.empty:
+            st.success("No group is flagged by either rule this week.", icon="✅")
+        else:
+            _key = [c for c in ["restaurant", "branch", "issue"] if c in _al.columns]
+            _show = _al[_key + ["agreement", "count", "threshold_baseline", "threshold_ratio",
+                                "z_baseline_mean", "z_score", "pct_change", "z_status", "reason"]]
+            st.dataframe(_show, hide_index=True, width="stretch", column_config={
+                "count": "Current (7d)", "threshold_baseline": st.column_config.NumberColumn("4-wk avg", format="%.2f"),
+                "threshold_ratio": st.column_config.NumberColumn("× avg", format="%.1f"),
+                "z_baseline_mean": st.column_config.NumberColumn("8-wk mean", format="%.2f"),
+                "z_score": st.column_config.NumberColumn("Z-score", format="%.2f"),
+                "pct_change": st.column_config.NumberColumn("% vs 8-wk mean", format="%.0f"),
+                "z_status": "Z status", "reason": "Reason"})
+        st.markdown(
+            f"**Backtest over {_cmp['weeks']} weeks** (this scope): in {_cmp['weeks_z_evaluable']} weeks where both "
+            f"rules could run, **both** flagged {_cmp['both']}, **threshold only** {_cmp['threshold_only']}, "
+            f"**Z-score only** {_cmp['z_only']}. The threshold rule also fired {_cmp['threshold_alerts_while_z_pending']} "
+            f"time(s) in {_cmp['weeks_z_pending']} early weeks when Z-score was still pending.")
+        if _lv != "issue" and not _al.size:
+            st.info("Branch- and restaurant-level weekly counts are very small (usually 0-2), so alerts are rare; "
+                    "the issue-category view has enough volume to compare the detectors.")
+
     pool = upto[upto["urgency"] >= 1]
     f1, f2, f3, f4 = st.columns([1.3, 1.3, 2, 1])
     status_f = f1.selectbox("Status", ["Open", "All", "Replied", "Resolved"])

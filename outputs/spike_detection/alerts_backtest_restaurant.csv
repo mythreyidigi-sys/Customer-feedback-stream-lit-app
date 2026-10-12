@@ -1,0 +1,2 @@
+restaurant,issue,count,threshold_baseline,threshold_ratio,threshold_alert,z_baseline_mean,z_sigma,z_score,pct_change,z_alert,z_status,reason,week_end
+Namma Veedu Vasantha Bhavan,Brand Reputation & Customer Satisfaction,4,0.25,4.0,True,0.3333333333333333,1.0,,,False,pending - insufficient history,4 reviews is 4.0x the 4-week average (0.25/wk; rule needs >= 3 and >= 2x),2025-11-27

@@ -1,0 +1,42 @@
+{
+  "db": "C:\\2026 MBA\\Project\\Customer-feedback-stream-lit-app.git\\scripts_new792026\\empathy_engine (5)\\empathy_engine\\data\\empathy.db",
+  "as_of": "2026-04-30",
+  "levels": {
+    "issue": {
+      "level": "issue",
+      "weeks": 26,
+      "both": 6,
+      "threshold_only": 11,
+      "z_only": 0,
+      "weeks_z_evaluable": 20,
+      "weeks_z_pending": 5,
+      "threshold_alerts_while_z_pending": 5,
+      "groups": 9,
+      "max_weekly_count": 6
+    },
+    "restaurant": {
+      "level": "restaurant",
+      "weeks": 26,
+      "both": 0,
+      "threshold_only": 0,
+      "z_only": 0,
+      "weeks_z_evaluable": 20,
+      "weeks_z_pending": 5,
+      "threshold_alerts_while_z_pending": 1,
+      "groups": 44,
+      "max_weekly_count": 4
+    },
+    "branch": {
+      "level": "branch",
+      "weeks": 26,
+      "both": 0,
+      "threshold_only": 0,
+      "z_only": 0,
+      "weeks_z_evaluable": 20,
+      "weeks_z_pending": 5,
+      "threshold_alerts_while_z_pending": 0,
+      "groups": 130,
+      "max_weekly_count": 2
+    }
+  }
+}
