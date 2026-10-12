@@ -16,3 +16,4 @@ playwright
 python-dateutil
 schedule
 xgboost>=2.0
+shap>=0.45

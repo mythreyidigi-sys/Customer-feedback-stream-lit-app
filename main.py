@@ -996,3 +996,30 @@ elif page == PAGES[7]:
                    "Target definition and features: outputs/xgb_priority/target_definition.md.")
         with st.expander("Data audit"):
             st.dataframe(pd.read_csv(_xdir / "data_audit.csv"), hide_index=True, width="stretch")
+
+        _sdir = _xdir / "shap"
+        if (_sdir / "local_explanations.json").is_file():
+            st.markdown("---\n**Why does the model flag these? · SHAP explanations**")
+            _st = _json.loads((_sdir / "stability_summary.json").read_text())
+            st.info("SHAP shows which inputs moved the model's prediction. It does **not** show that a feature "
+                    "causes a sentiment decline.")
+            if _st["stable"]:
+                st.success(f"Explanations are reasonably stable (mean rank correlation {_st['mean_spearman']:.2f}, "
+                           f"top-5 overlap {_st['mean_top5_overlap']:.0%} across {_st['resamples']} refits).")
+            else:
+                st.warning(f"Explanations are **not very stable** (mean rank correlation {_st['mean_spearman']:.2f}, "
+                           f"top-5 overlap {_st['mean_top5_overlap']:.0%} across {_st['resamples']} refits) - "
+                           "the small panel makes feature rankings shift between refits; read them as indicative only.")
+            _gi = pd.read_csv(_sdir / "global_importance.csv")
+            _gc1, _gc2 = st.columns([3, 2])
+            _gc1.image(str(_sdir / "shap_summary.png"), caption="Global SHAP summary")
+            _gc2.markdown("**Leading contributing factors**")
+            _gc2.dataframe(_gi.head(8).rename(columns={"mean_abs_shap": "Mean |SHAP|",
+                                                       "value_vs_risk_corr": "Higher value → risk"}),
+                           hide_index=True, width="stretch")
+            _loc = _json.loads((_sdir / "local_explanations.json").read_text())
+            _pick = st.selectbox("High-risk prediction to explain", range(len(_loc)), format_func=lambda k: (
+                f"{_loc[k]['restaurant']} · {_loc[k]['source']} · {_loc[k]['month']} "
+                f"({_loc[k]['predicted_decline_probability']:.0%} risk)"))
+            st.write(_loc[_pick]["explanation"])
+            st.image(str(_sdir / _loc[_pick]["plot"]), caption="Local SHAP waterfall (log-odds; feature values shown are standardised)")

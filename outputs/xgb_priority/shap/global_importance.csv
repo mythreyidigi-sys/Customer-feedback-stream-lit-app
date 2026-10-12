@@ -1,0 +1,23 @@
+feature,mean_abs_shap,value_vs_risk_corr
+Mean sentiment this month,0.34898403,0.7549363668978633
+Share of: Brand Reputation & Customer Satisfaction,0.3331484,-0.7469113798557941
+Source: Zomato,0.20810866,0.9999999999999994
+Share of: Pricing & Staff Performance,0.20067349,0.722761435104981
+Share of negative reviews,0.11775139,-0.47258751521729764
+Share of: Slow Service & Staff Negligence,0.06219587,-0.8594329647515506
+Share of: Food Quality & Branch Consistency,0.053577725,-0.7377384355340113
+Share of: Ambience & Location,0.047312263,-0.7235872971741987
+Share of: Food Quantity & Value for Money,0.046275143,0.6712507837814534
+Share of: Service Quality,0.036712434,-0.7852865960463189
+Restaurant: Namma Veedu Vasantha Bhavan,0.03643312,-0.9986778646569798
+Total complaint share,0.029317869,0.7636247863936307
+Share of: Food Variety & Fast Service,0.022452317,0.7213366425822647
+Share of: Poor Experience / Hygiene Complaints,0.013391114,-0.6885007665227413
+Review volume,0.012929335,0.4129805984591359
+Restaurant: A2B,0.0,0.0
+Restaurant: Sangeetha,0.0,0.0
+Restaurant: Geetham,0.0,0.0
+Restaurant: Saravanabhavan,0.0,0.0
+Restaurant: Sree Annapoorna,0.0,0.0
+Source: Google,0.0,0.0
+Source: TripAdvisor,0.0,0.0

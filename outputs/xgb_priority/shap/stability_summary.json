@@ -1,0 +1,21 @@
+{
+  "resamples": 20,
+  "mean_spearman": 0.6763718696387391,
+  "min_spearman": 0.5525409919339028,
+  "mean_top5_overlap": 0.52,
+  "most_stable_top_features": [
+    "Mean sentiment this month",
+    "Share of: Brand Reputation & Customer Satisfaction",
+    "Source: Zomato",
+    "Share of: Pricing & Staff Performance",
+    "Share of negative reviews"
+  ],
+  "importance_sd_top": {
+    "Mean sentiment this month": 0.25334451049000845,
+    "Share of: Brand Reputation & Customer Satisfaction": 0.18968054209859694,
+    "Source: Zomato": 0.09807921890445094,
+    "Share of: Pricing & Staff Performance": 0.174244692331769,
+    "Share of negative reviews": 0.09097559996925501
+  },
+  "stable": false
+}

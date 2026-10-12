@@ -1,0 +1,110 @@
+[
+  {
+    "id": 0,
+    "restaurant": "Namma Veedu Vasantha Bhavan",
+    "source": "Zomato",
+    "month": "2026-01",
+    "predicted_decline_probability": 0.7911776304244995,
+    "actual_decline": 1,
+    "top_contributions": [
+      {
+        "feature": "Mean sentiment this month",
+        "shap": 0.5223308801651001
+      },
+      {
+        "feature": "Source: Zomato",
+        "shap": 0.24308530986309052
+      },
+      {
+        "feature": "Share of: Pricing & Staff Performance",
+        "shap": 0.2255164086818695
+      },
+      {
+        "feature": "Share of negative reviews",
+        "shap": 0.15927579998970032
+      },
+      {
+        "feature": "Share of: Food Quality & Branch Consistency",
+        "shap": 0.06612810492515564
+      },
+      {
+        "feature": "Share of: Slow Service & Staff Negligence",
+        "shap": 0.05710867792367935
+      }
+    ],
+    "explanation": "For Namma Veedu Vasantha Bhavan on Zomato in 2026-01, the model puts the chance that sentiment declines next month at 79%. The biggest drivers were: Mean sentiment this month (raises the risk); Source: Zomato (raises the risk); Share of: Pricing & Staff Performance (raises the risk). These are patterns the model learned, not proven causes.",
+    "plot": "local_0.png"
+  },
+  {
+    "id": 1,
+    "restaurant": "Saravanabhavan",
+    "source": "TripAdvisor",
+    "month": "2025-11",
+    "predicted_decline_probability": 0.7524942755699158,
+    "actual_decline": 1,
+    "top_contributions": [
+      {
+        "feature": "Mean sentiment this month",
+        "shap": 0.5347400903701782
+      },
+      {
+        "feature": "Share of: Brand Reputation & Customer Satisfaction",
+        "shap": 0.46546536684036255
+      },
+      {
+        "feature": "Source: Zomato",
+        "shap": -0.18389394879341125
+      },
+      {
+        "feature": "Share of negative reviews",
+        "shap": 0.135352224111557
+      },
+      {
+        "feature": "Share of: Pricing & Staff Performance",
+        "shap": 0.0945081040263176
+      },
+      {
+        "feature": "Share of: Food Quality & Branch Consistency",
+        "shap": -0.0577479712665081
+      }
+    ],
+    "explanation": "For Saravanabhavan on TripAdvisor in 2025-11, the model puts the chance that sentiment declines next month at 75%. The biggest drivers were: Mean sentiment this month (raises the risk); Share of: Brand Reputation & Customer Satisfaction (raises the risk); Source: Zomato (lowers the risk). These are patterns the model learned, not proven causes.",
+    "plot": "local_1.png"
+  },
+  {
+    "id": 2,
+    "restaurant": "Namma Veedu Vasantha Bhavan",
+    "source": "Google",
+    "month": "2026-02",
+    "predicted_decline_probability": 0.7510113716125488,
+    "actual_decline": 1,
+    "top_contributions": [
+      {
+        "feature": "Mean sentiment this month",
+        "shap": 0.5323395133018494
+      },
+      {
+        "feature": "Share of: Brand Reputation & Customer Satisfaction",
+        "shap": 0.4350275695323944
+      },
+      {
+        "feature": "Share of: Pricing & Staff Performance",
+        "shap": 0.21550774574279785
+      },
+      {
+        "feature": "Source: Zomato",
+        "shap": -0.18389394879341125
+      },
+      {
+        "feature": "Share of negative reviews",
+        "shap": 0.1655767261981964
+      },
+      {
+        "feature": "Restaurant: Namma Veedu Vasantha Bhavan",
+        "shap": -0.05646611005067825
+      }
+    ],
+    "explanation": "For Namma Veedu Vasantha Bhavan on Google in 2026-02, the model puts the chance that sentiment declines next month at 75%. The biggest drivers were: Mean sentiment this month (raises the risk); Share of: Brand Reputation & Customer Satisfaction (raises the risk); Share of: Pricing & Staff Performance (raises the risk). These are patterns the model learned, not proven causes.",
+    "plot": "local_2.png"
+  }
+]
