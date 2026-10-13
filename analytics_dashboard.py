@@ -112,6 +112,39 @@ def top_issues_table(ctx: dict) -> None:
                      "previous": "Previous", "trend": "Change", "issue": "Issue"})
 
 
+PIPELINE_STEPS = [("All reviews", "Selected chains + rivals"), ("Embed together", "Same Sentence-Transformer"),
+                  ("HDBSCAN once", "Shared clusters"), ("Groq labels", "Name each cluster")]
+CHAIN_COLOURS = ["#1D9E75", "#D85A30", "#7F77DD", "#E0A526", "#3B8BD4", "#B4B2A9"]
+
+
+def cluster_share_chart(df: pd.DataFrame, max_clusters: int = 12) -> None:
+    """Share of each ML cluster (HDBSCAN + LLM label) contributed by each chain: crosstab normalised by cluster."""
+    cols = st.columns(len(PIPELINE_STEPS))
+    for col, (title, sub) in zip(cols, PIPELINE_STEPS):
+        col.markdown(f"<div style='border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;"
+                     f"background:#f7f5f0'><b>{title}</b><br><small>{sub}</small></div>", unsafe_allow_html=True)
+    data = df[~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
+    if data["restaurant"].nunique() < 2 or data.empty:
+        st.info("Select at least one competitor in 'Compare with' to see how each cluster splits across chains.")
+        return
+    top = data["issue"].value_counts().head(max_clusters).index
+    data = data[data["issue"].isin(top)]
+    share = pd.crosstab(data["issue"], data["restaurant"], normalize="index") * 100
+    counts = data["issue"].value_counts()
+    share = share.loc[counts.index[::-1]]
+    fig = px.bar(share.reset_index().melt(id_vars="issue", var_name="restaurant", value_name="share"),
+                 y="issue", x="share", color="restaurant", orientation="h", text="share",
+                 color_discrete_sequence=CHAIN_COLOURS, category_orders={"issue": list(share.index)})
+    fig.update_traces(texttemplate="%{text:.0f}%", textposition="inside")
+    fig.update_layout(barmode="stack", xaxis=dict(range=[0, 100], ticksuffix="%", title=None), yaxis_title=None,
+                      legend_title=None, legend=dict(orientation="h", y=-0.15), margin=dict(t=10, b=10),
+                      height=max(320, 55 * len(share) + 80))
+    st.markdown("**Share of each cluster by chain**")
+    st.plotly_chart(fig, width="stretch")
+    st.caption("Share per cluster = pd.crosstab(cluster, chain, normalize='index'). Clusters are the shared "
+               "HDBSCAN groups already stored on each review, so every chain is measured on the same labels.")
+
+
 def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """Reputation score per restaurant/branch/month and the issue clusters behind it."""
     clustered = df[~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
@@ -143,6 +176,7 @@ def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
                                    yaxis_title=None), width="stretch")
     with d2.container(border=True):
         top_issues_table(issues_ctx)
+    cluster_share_chart(df)
     st.markdown("**Reputation by restaurant and branch**")
     rows = [{"restaurant": r, "branch": b, "reviews": len(d), "score": an.reputation_score(d),
              "negative_pct": round((d["sentiment"] == "negative").mean() * 100, 1)}
