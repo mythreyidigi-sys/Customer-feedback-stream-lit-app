@@ -115,8 +115,6 @@ def top_issues_table(ctx: dict) -> None:
 PIPELINE_STEPS = [("All reviews", "Selected chains + rivals"), ("Embed together", "Same Sentence-Transformer"),
                   ("HDBSCAN once", "Shared clusters"), ("Groq labels", "Name each cluster")]
 CHAIN_COLOURS = ["#1D9E75", "#D85A30", "#7F77DD", "#E0A526", "#3B8BD4", "#B4B2A9"]
-WIN_LOSS_STEPS = [("All reviews", "Every chain"), ("Name filter", "Regex on rivals"),
-                  ("Groq classify", "Win / loss / neutral"), ("Net win rate", "Tracked monthly")]
 
 
 def cluster_share_chart(df: pd.DataFrame, max_clusters: int = 12) -> None:
@@ -183,179 +181,6 @@ def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
              "negative_pct": round((d["sentiment"] == "negative").mean() * 100, 1)}
             for (r, b), d in df.groupby(["restaurant", "branch"])]
     st.dataframe(pd.DataFrame(rows).sort_values("score"), width="stretch", hide_index=True)
-
-
-RIVAL_PATTERNS = {
-    "A2B": r"\ba2b\b|adyar ananda", "Sangeetha": r"sangeetha|sangeeta", "Geetham": r"\bgeetham\b|\bgeetam\b",
-    "Saravana Bhavan": r"saravana", "Vasantha Bhavan": r"vasantha|namma veedu",
-    "Sree Annapoorna": r"annapoorna|annapurna",
-}
-WIN_LOSS_LABELS = ("win", "loss", "neutral")
-MAX_CLASSIFIED = 120
-WIN_RE = re.compile(r"better than|best compared|superior to|nicer than|tastier than|prefer(?:red)? (?:this|it) "
-                    r"over|instead of|unlike|beats|than (?:the )?(?:usual|other)", re.I)
-LOSS_RE = re.compile(r"used to (?:come|go|visit)|now (?:go|going|prefer|we go)|switched to|moved to|"
-                     r"better at|better in|\w+ is better|go to .+ instead|not as good as|worse than|"
-                     r"inferior to|prefer .+ over", re.I)
-
-
-def rival_mentions(df: pd.DataFrame, own: str) -> pd.DataFrame:
-    """Own-restaurant reviews that name a rival chain (regex name filter)."""
-    rows = []
-    for rival, pat in RIVAL_PATTERNS.items():
-        if re.search(pat, own, re.I):
-            continue
-        hit = df[(df["restaurant"] == own) & df["review"].str.contains(pat, case=False, regex=True)]
-        rows.append(hit.assign(rival=rival))
-    return pd.concat(rows) if rows else df.iloc[0:0].assign(rival=pd.Series(dtype=str))
-
-
-def _rule_label(text: str) -> str:
-    if LOSS_RE.search(text) and not re.search(r"better than", text, re.I):
-        return "loss"
-    return "win" if WIN_RE.search(text) else "neutral"
-
-
-@st.cache_data(show_spinner="Classifying competitor mentions with Groq…")
-def classify_win_loss(pairs: tuple[tuple[str, str, str], ...]) -> tuple[list[str], str]:
-    """(own, rival, text) -> win/loss/neutral. Uses Groq LLM when a key is set, else a keyword fallback."""
-    try:
-        from engine.config import GROQ_API_KEY, GROQ_MODEL
-        from engine.replies import _groq
-    except ImportError:
-        GROQ_API_KEY, GROQ_MODEL, _groq = "", "", None
-    if not (GROQ_API_KEY and _groq):
-        return [_rule_label(t) for _, _, t in pairs], "Keyword rules (set GROQ_API_KEY for the Groq LLM)"
-    labels = []
-    for own, rival, text in pairs:
-        prompt = (f"A customer review of {own} mentions a competitor, {rival}.\nReview: \"{text[:600]}\"\n"
-                  f"Answer with exactly one word. 'win' if the customer says {own} is better than {rival} or "
-                  f"chose {own} over it; 'loss' if they say {rival} is better or they left {own} for {rival}; "
-                  f"otherwise 'neutral'.")
-        out = (_groq(prompt, max_tokens=5, temperature=0) or "").strip().lower()
-        labels.append(next((l for l in WIN_LOSS_LABELS if l in out), _rule_label(text)))
-    return labels, f"Groq LLM · {GROQ_MODEL} (zero-shot classifier)"
-
-
-def win_loss_section(df: pd.DataFrame, own: str) -> None:
-    """Competitive win/loss: regex name filter -> Groq classify -> monthly net win rate."""
-    st.markdown("### Competitive win / loss tracker")
-    cols = st.columns(len(WIN_LOSS_STEPS))
-    for col, (title, sub) in zip(cols, WIN_LOSS_STEPS):
-        col.markdown(f"<div style='border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;"
-                     f"background:#f7f5f0'><b>{title}</b><br><small>{sub}</small></div>", unsafe_allow_html=True)
-    men = rival_mentions(df, own)
-    if men.empty:
-        st.info(f"No {own} reviews name a rival chain in the selected period.")
-        return
-    men = men.sort_values("review_date", ascending=False).head(MAX_CLASSIFIED)
-    labels, engine = classify_win_loss(tuple(zip([own] * len(men), men["rival"], men["review"])))
-    men = men.assign(outcome=labels)
-    st.caption(f"ML model used: **{engine}**. Net win rate = (wins − losses) / (wins + losses). "
-               f"Latest {MAX_CLASSIFIED} rival mentions are classified.")
-    wins, losses = (men["outcome"] == "win").sum(), (men["outcome"] == "loss").sum()
-    net = (wins - losses) / (wins + losses) * 100 if wins + losses else float("nan")
-    kpi_row([("Rival mentions", f"{len(men):,}"), ("Wins", str(wins)), ("Losses", str(losses)),
-             ("Net win rate", f"{net:+.0f}%" if pd.notna(net) else "n/a")])
-    c1, c2 = st.columns(2)
-    by_rival = men.groupby(["rival", "outcome"]).size().reset_index(name="reviews")
-    c1.markdown("**Outcome by rival**")
-    c1.plotly_chart(px.bar(by_rival, y="rival", x="reviews", color="outcome", orientation="h",
-                           color_discrete_map={"win": "#1D9E75", "loss": "#D85A30", "neutral": "#B4B2A9"})
-                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None, legend_title=None), width="stretch")
-    monthly = men.assign(month=pd.to_datetime(men["review_date"]).dt.to_period("M").dt.to_timestamp())
-    monthly = monthly.groupby("month")["outcome"].agg(
-        wins=lambda s: (s == "win").sum(), losses=lambda s: (s == "loss").sum()).reset_index()
-    monthly = monthly[(monthly["wins"] + monthly["losses"]) > 0]
-    monthly["net_win_rate"] = (monthly["wins"] - monthly["losses"]) / (monthly["wins"] + monthly["losses"]) * 100
-    c2.markdown("**Net win rate by month**")
-    if len(monthly):
-        c2.plotly_chart(px.line(monthly, x="month", y="net_win_rate", markers=True)
-                        .update_layout(margin=dict(t=10, b=10), yaxis=dict(range=[-100, 100], ticksuffix="%"),
-                                       yaxis_title=None, xaxis_title=None), width="stretch")
-    else:
-        c2.info("Not enough win/loss mentions to chart a monthly trend.")
-    g, l = st.columns(2)
-    for box, label, colour in ((g, "win", "#E8F5EC"), (l, "loss", "#FBE9EA")):
-        ex = men[men["outcome"] == label].head(3)
-        box.markdown(f"**Example {label}s**")
-        for t, r in zip(ex["review"], ex["rival"]):
-            box.markdown(f"<div style='background:{colour};border-radius:8px;padding:8px;margin-bottom:6px'>"
-                         f"“{t[:220]}” <small>(vs {r})</small></div>", unsafe_allow_html=True)
-
-
-DRIVER_STEPS = [("Cluster dummies", "From HDBSCAN"), ("LightGBM", "One per chain"),
-                ("SHAP", "Importance per cluster")]
-MIN_DRIVER_REVIEWS = 40
-
-
-@st.cache_data(show_spinner="Training LightGBM + SHAP…")
-def driver_importance(clusters: tuple[str, ...], ratings: tuple[float, ...]) -> pd.DataFrame:
-    """LightGBM on cluster dummies -> rating; importance = mean |SHAP| per cluster, performance = avg rating."""
-    import lightgbm as lgb
-    import shap
-
-    d = pd.DataFrame({"cluster": clusters, "rating": ratings})
-    keep = d["cluster"].value_counts()
-    d = d[d["cluster"].isin(keep[keep >= 5].index)]
-    x = pd.get_dummies(d["cluster"]).astype(int)
-    model = lgb.LGBMRegressor(n_estimators=150, learning_rate=0.05, num_leaves=8, min_child_samples=5,
-                              verbose=-1, random_state=0).fit(x, d["rating"])
-    sv = shap.TreeExplainer(model).shap_values(x)
-    imp = pd.Series(abs(sv).mean(axis=0), index=x.columns)
-    perf = d.groupby("cluster")["rating"].agg(["mean", "size"])
-    return pd.DataFrame({"cluster": imp.index, "importance": imp.values,
-                         "performance": perf.loc[imp.index, "mean"].values,
-                         "reviews": perf.loc[imp.index, "size"].values})
-
-
-def driver_matrix_section(df: pd.DataFrame, own: str) -> None:
-    """Importance (mean |SHAP|) vs performance (avg rating) quadrant chart for one chain's clusters."""
-    st.markdown("### Priority matrix: what to fix first")
-    cols = st.columns(len(DRIVER_STEPS))
-    for col, (title, sub) in zip(cols, DRIVER_STEPS):
-        col.markdown(f"<div style='border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;"
-                     f"background:#f7f5f0'><b>{title}</b><br><small>{sub}</small></div>", unsafe_allow_html=True)
-    chains = sorted(df["restaurant"].unique())
-    chain = st.selectbox("Chain (one LightGBM model per chain)", chains,
-                         index=chains.index(own) if own in chains else 0, key="driver_chain")
-    d = df[(df["restaurant"] == chain) & df["rating"].notna()]
-    d = d[~d["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
-    if len(d) < MIN_DRIVER_REVIEWS or d["issue"].nunique() < 3:
-        st.info(f"Need at least {MIN_DRIVER_REVIEWS} clustered, rated reviews and 3 clusters for {chain}.")
-        return
-    try:
-        res = driver_importance(tuple(d["issue"].astype(str)), tuple(d["rating"].astype(float)))
-    except ImportError:
-        st.info("Install 'lightgbm' and 'shap' to show the priority matrix.")
-        return
-    x_mid, y_mid = res["importance"].median(), d["rating"].mean()
-    res["quadrant"] = [("Fix first" if p < y_mid else "Keep strengths") if i >= x_mid
-                       else ("Low priority" if p < y_mid else "Maintain")
-                       for i, p in zip(res["importance"], res["performance"])]
-    fig = px.scatter(res, x="importance", y="performance", text="cluster", color="quadrant", size="reviews",
-                     size_max=28, color_discrete_map={"Fix first": "#D85A30", "Keep strengths": "#1D9E75",
-                                                      "Maintain": "#3B8BD4", "Low priority": "#B4B2A9"})
-    xmax, ymin, ymax = res["importance"].max() * 1.1, res["performance"].min() - 0.2, res["performance"].max() + 0.2
-    fig.add_shape(type="rect", x0=x_mid, x1=xmax, y0=ymin, y1=y_mid, fillcolor="#FBE9EA", opacity=0.5, line_width=0,
-                  layer="below")
-    fig.add_vline(x=x_mid, line_dash="dash", line_color="#999")
-    fig.add_hline(y=y_mid, line_dash="dash", line_color="#999")
-    for txt, ax, ay in (("Maintain", 0.01, 0.98), ("Keep strengths", 0.99, 0.98),
-                        ("Low priority", 0.01, 0.02), ("Fix first", 0.99, 0.02)):
-        fig.add_annotation(xref="paper", yref="paper", x=ax, y=ay, text=f"<b>{txt}</b>", showarrow=False,
-                           xanchor="left" if ax < 0.5 else "right", yanchor="top" if ay > 0.5 else "bottom")
-    fig.update_traces(textposition="top center")
-    fig.update_layout(margin=dict(t=10, b=10), height=480, legend_title=None,
-                      xaxis=dict(title="Importance (mean |SHAP|) →", range=[0, xmax]),
-                      yaxis=dict(title="Performance (avg rating in cluster) ↑", range=[ymin, ymax]))
-    st.plotly_chart(fig, width="stretch")
-    st.caption("ML model used: **LightGBM regressor** (rating ~ HDBSCAN cluster dummies, one model per chain) "
-               "explained with **SHAP TreeExplainer**. Dashed lines = median importance and the chain's average "
-               "rating. Bubble size = reviews in the cluster.")
-    fix = res[res["quadrant"] == "Fix first"].sort_values("importance", ascending=False)
-    if len(fix):
-        st.markdown("**Fix first:** " + ", ".join(fix["cluster"]))
 
 
 DISH_PATTERNS = {
@@ -457,40 +282,24 @@ def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     own = issues_ctx["restaurant"]
     if df["restaurant"].nunique() < 2:
         st.info("Select at least one competitor in 'Compare with' (sidebar) to unlock the cluster comparison.")
-        win_loss_section(df, own)
-        driver_matrix_section(df, own)
+        dish_comparison_section(df, own)
         return
-    rows = [{"restaurant": r, "reviews": len(d), "score": an.reputation_score(d),
-             "avg_rating": d["rating"].mean(), "negative_pct": (d["sentiment"] == "negative").mean() * 100}
-            for r, d in df.groupby("restaurant")]
-    comp = pd.DataFrame(rows).sort_values("score", ascending=False)
+    rows = [{"restaurant": r, "reputation": an.reputation_score(d)} for r, d in df.groupby("restaurant")]
+    comp = pd.DataFrame(rows).sort_values("reputation", ascending=False)
     rivals = comp[comp["restaurant"] != own]
     own_row = comp[comp["restaurant"] == own]
     if len(own_row) and len(rivals):
-        gap = own_row["score"].iloc[0] - rivals["score"].mean()
-        rank = int((comp["score"] > own_row["score"].iloc[0]).sum()) + 1
-        kpi_row([(f"{own} reputation score", f"{own_row['score'].iloc[0]:.1f}"),
-                 ("Rank among compared chains", f"{rank} of {len(comp)}"),
-                 ("Gap vs rival average", f"{gap:+.1f}"),
-                 ("Best rival", f"{rivals.iloc[0]['restaurant']} ({rivals.iloc[0]['score']:.1f})")])
-    c1, c2 = st.columns(2)
-    c1.markdown("**Reputation score by chain**")
-    c1.plotly_chart(px.bar(comp.sort_values("score"), y="restaurant", x="score", orientation="h", text="score",
-                           range_x=[0, 100]).update_traces(texttemplate="%{text:.1f}")
-                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None), width="stretch")
-    c2.markdown("**Negative review share by chain**")
-    c2.plotly_chart(px.bar(comp.sort_values("negative_pct"), y="restaurant", x="negative_pct", orientation="h",
-                           text="negative_pct").update_traces(texttemplate="%{text:.1f}%")
-                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None, xaxis_title="% negative"),
-                    width="stretch")
+        score = own_row["reputation"].iloc[0]
+        kpi_row([(f"{own} reputation score", f"{score:.1f}"),
+                 ("Rank among compared chains", f"{int((comp['reputation'] > score).sum()) + 1} of {len(comp)}"),
+                 ("Gap vs rival average", f"{score - rivals['reputation'].mean():+.1f}"),
+                 ("Best rival", f"{rivals.iloc[0]['restaurant']} ({rivals.iloc[0]['reputation']:.1f})")])
     cluster_share_chart(df)
     st.markdown("**Reviews per cluster and chain**")
     clustered = df[~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
     st.dataframe(pd.crosstab(clustered["issue"], clustered["restaurant"], margins=True, margins_name="Total"),
                  width="stretch")
-    win_loss_section(df, own)
     dish_comparison_section(df, own)
-    driver_matrix_section(df, own)
 
 
 def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:

@@ -16,10 +16,9 @@ Pipeline (final dataset: 6 chains x 3 platforms = 18 combinations):
            1. Search            upload and import review files
            2. Analytics         reputation scoring, clustering, sentiment and segment charts
            3. Overview          KPIs, top issues, priority decision panel
-           4. Early warning     Module 6 - reputation early-warning & resolution
-           5. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
-           6. Monthly report    PDF summary for managers
-           7. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
+           4. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
+           5. Monthly report    PDF summary for managers
+           6. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
 
 Setup:
     pip install -r requirements.txt
@@ -77,8 +76,8 @@ db.init_db()
 
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
-PAGES = ["🔍 1. Search", "📈 2. Analytics", "📊 3. Overview", "🚨 4. Early warning", "📣 5. Campaigns",
-         "📄 6. Monthly report", "🧭 7. SERVQUAL", "🎯 8. Issue priority"]
+PAGES = ["🔍 1. Search", "📈 2. Analytics", "📊 3. Overview", "📣 4. Campaigns",
+         "📄 5. Monthly report", "🧭 6. SERVQUAL"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -574,16 +573,7 @@ elif page == PAGES[2]:
                                         "priority_score": st.column_config.NumberColumn("Score", format="%.0f"),
                                         "campaign": "Linked campaign"})
 
-    c1, c2 = st.columns(2)
-    with c1.container(border=True):
-        st.markdown("**Versus competitors** · reputation score")
-        comp = an.competitor_scores(an.filter_reviews(df_all, sources=sources), [ss.restaurant] + compare, cur_start, cur_end)
-        comp = comp.sort_values("score")
-        fig = go.Figure(go.Bar(x=comp["score"], y=comp["restaurant"], orientation="h", text=comp["score"],
-                               marker_color=[ACCENT if r == ss.restaurant else GREY for r in comp["restaurant"]]))
-        fig.update_layout(height=60 + 45 * len(comp), margin=dict(l=0, r=0, t=10, b=0), xaxis=dict(range=[0, 100]))
-        st.plotly_chart(fig, width="stretch")
-    with c2.container(border=True):
+    with st.container(border=True):
         st.markdown("**Customer emotions**")
         em = cur["emotion"].value_counts().reset_index()
         fig = px.bar(em, x="count", y="emotion", orientation="h", color="emotion",
@@ -599,143 +589,8 @@ elif page == PAGES[2]:
                      .sort_values("review_date", ascending=False), hide_index=True, width="stretch")
         st.download_button("Download CSV", show.to_csv(index=False).encode(), f"{ss.restaurant}_reviews.csv", "text/csv")
 
-# ================================================================== 3. EARLY WARNING (MODULE 6)
-elif page == PAGES[3]:
-    st.markdown("**Module 6 · Reputation early-warning & resolution**  \n"
-                "<span class='small'>Spikes are flagged when an issue at a branch runs well above its 4-week average. "
-                "Reviews needing attention are listed most urgent first, each with a recommended fix and a drafted "
-                "reply for a manager to approve.</span>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        st.markdown("**Active alerts** · last 7 days vs 4-week average")
-        if len(spikes):
-            sp = spikes.copy()
-            sp["severity"] = ["🔴 Critical" if match_campaign(i) == 5 or r >= 3 else "🟠 High" if r >= 2 else "🟡 Watch"
-                              for i, r in zip(sp["issue"], sp["ratio"])]
-            cols = [c for c in ["severity", "issue", "branch", "this_week", "ratio"] if c in sp.columns]
-            st.dataframe(sp[cols], hide_index=True, width="stretch",
-                         column_config={"this_week": "Last 7 days",
-                                        "ratio": st.column_config.NumberColumn("× 4-week avg", format="%.1f")})
-            st.caption("Hygiene alerts are always critical: they pause Campaign 5 until an internal review is done.")
-        else:
-            st.success("No spikes this week.", icon="✅")
-
-    with st.container(border=True):
-        import spike_detection as _sd
-        st.markdown("**Spike detector comparison** · existing threshold rule vs Z-score")
-        _lv = st.radio("Group complaints by", ["issue", "restaurant", "branch"], horizontal=True,
-                       format_func={"issue": "Issue category", "restaurant": "Restaurant × issue",
-                                    "branch": "Branch × issue"}.get, key="spike_level")
-        _al = _sd.current_alerts(upto, as_of, _lv)
-        _cmp = _sd.comparison(upto, as_of, _lv)
-        st.caption(
-            f"Negative, non-positive-issue reviews per 7 days ending {pd.Timestamp(as_of).date()}. "
-            f"**Threshold**: ≥ {_sd.MIN_COUNT} reviews and ≥ {_sd.RATIO_THRESHOLD:g}× the 4-week average "
-            f"(baseline floored at 1/week). **Z-score**: ≥ {_sd.MIN_COUNT} reviews and Z ≥ {_sd.Z_THRESHOLD:g} "
-            f"against the previous {_sd.Z_HISTORY_WEEKS} weeks (needs ≥ {_sd.Z_MIN_HISTORY} weeks of history; "
-            "otherwise shown as pending, never zero-filled before the first review date).")
-        if _al.empty:
-            st.success("No group is flagged by either rule this week.", icon="✅")
-        else:
-            _key = [c for c in ["restaurant", "branch", "issue"] if c in _al.columns]
-            _show = _al[_key + ["agreement", "count", "threshold_baseline", "threshold_ratio",
-                                "z_baseline_mean", "z_score", "pct_change", "z_status", "reason"]]
-            st.dataframe(_show, hide_index=True, width="stretch", column_config={
-                "count": "Current (7d)", "threshold_baseline": st.column_config.NumberColumn("4-wk avg", format="%.2f"),
-                "threshold_ratio": st.column_config.NumberColumn("× avg", format="%.1f"),
-                "z_baseline_mean": st.column_config.NumberColumn("8-wk mean", format="%.2f"),
-                "z_score": st.column_config.NumberColumn("Z-score", format="%.2f"),
-                "pct_change": st.column_config.NumberColumn("% vs 8-wk mean", format="%.0f"),
-                "z_status": "Z status", "reason": "Reason"})
-        st.markdown(
-            f"**Backtest over {_cmp['weeks']} weeks** (this scope): in {_cmp['weeks_z_evaluable']} weeks where both "
-            f"rules could run, **both** flagged {_cmp['both']}, **threshold only** {_cmp['threshold_only']}, "
-            f"**Z-score only** {_cmp['z_only']}. The threshold rule also fired {_cmp['threshold_alerts_while_z_pending']} "
-            f"time(s) in {_cmp['weeks_z_pending']} early weeks when Z-score was still pending.")
-        if _lv != "issue" and not _al.size:
-            st.info("Branch- and restaurant-level weekly counts are very small (usually 0-2), so alerts are rare; "
-                    "the issue-category view has enough volume to compare the detectors.")
-
-    pool = upto[upto["urgency"] >= 1]
-    f1, f2, f3, f4 = st.columns([1.3, 1.3, 2, 1])
-    status_f = f1.selectbox("Status", ["Open", "All", "Replied", "Resolved"])
-    min_u = f2.slider("Minimum urgency", 1, 10, HIGH_THRESHOLD)
-    issue_f = f3.multiselect("Issue", sorted(pool["issue"].dropna().unique()), placeholder="All issues")
-    per_page = f4.selectbox("Show", [10, 20, 50], index=0)
-
-    q = pool[pool["urgency"] >= min_u]
-    if status_f == "Open":
-        q = q[~q["status"].isin(an.CLOSED)]
-    elif status_f != "All":
-        q = q[q["status"] == status_f]
-    if issue_f:
-        q = q[q["issue"].isin(issue_f)]
-    q = q.sort_values(["urgency", "review_date"], ascending=[False, False])
-
-    a, b, c, d = st.columns(4)
-    open_all = pool[(pool["urgency"] >= HIGH_THRESHOLD) & ~pool["status"].isin(an.CLOSED)]
-    a.metric("Urgent (8-10), open", int((open_all["urgency"] >= URGENT_THRESHOLD).sum()), border=True)
-    b.metric("High (6-7), open", int((open_all["urgency"] < URGENT_THRESHOLD).sum()), border=True)
-    c.metric("Overdue > 48 h", len(esc_overdue), border=True)
-    d.metric("Resolved (all time)", int((pool["status"] == "Resolved").sum()), border=True)
-
-    st.caption(f"{len(q)} reviews match · showing {min(per_page, len(q))}")
-    for r in q.head(per_page).itertuples():
-        rid = int(r.id)
-        rec = recommend(r.issue, r.branch)
-        if r.urgency >= URGENT_THRESHOLD:
-            u = pill(f"Urgent · {r.urgency}/10", "p-urgent")
-        elif r.urgency >= HIGH_THRESHOLD:
-            u = pill(f"High · {r.urgency}/10", "p-high")
-        else:
-            u = pill(f"Medium · {r.urgency}/10")
-        if r.status == "Resolved":
-            u = pill("Resolved", "p-ok") + u
-        age = (pd.Timestamp(as_of) - r.review_date).days
-        with st.container(border=True):
-            top_l, top_r = st.columns([3, 2])
-            top_l.markdown(u + pill(r.issue) + pill(str(r.emotion).title()) + (pill("⚠ red flag", "p-urgent") if r.red_flag else ""),
-                           unsafe_allow_html=True)
-            top_r.markdown(f"<div class='small' style='text-align:right'>{r.source} · {r.branch} · "
-                           f"{'★' * int(r.rating) if pd.notna(r.rating) else 'no rating'} · {r.review_date:%d %b} ({age} days ago)</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='quote'>“{r.text}”</div>", unsafe_allow_html=True)
-            st.info(f"**Recommended action:** {rec['action']} · Owner: {rec['owner']} · {deadline_text(rec['sla_hours'])}",
-                    icon="💡")
-
-            key = f"reply_{rid}"
-            if key not in ss:
-                ss[key] = r.reply_text if isinstance(r.reply_text, str) and r.reply_text else template_reply(r.restaurant, r.branch, r.issue, r.emotion, r.text)
-
-            def ai_draft(k=key, row=r):
-                ss[k], _ = draft_reply(row.restaurant, row.branch, row.issue, row.emotion, row.text, row.rating)
-
-            st.text_area("Drafted reply (edit before approving)", key=key, height=110)
-            b1, b2, b3, b4, b5 = st.columns([1.4, 1.2, 1.6, 1.1, 1.6])
-            if b1.button("✅ Approve reply", key=f"ap_{rid}", type="primary"):
-                db.upsert_action(rid, status="Replied" if r.status != "Resolved" else "Resolved",
-                                 reply_text=ss[key], replied_at=datetime.now().isoformat(timespec="seconds"),
-                                 action_text=rec["action"])
-                st.toast("Reply approved — copy it and post it on " + r.source)
-                st.rerun()
-            b2.button("✨ AI draft", key=f"ai_{rid}", on_click=ai_draft, disabled=not groq_available(),
-                      help=None if groq_available() else "Set GROQ_API_KEY to enable")
-            who = b3.selectbox("Assign", TEAM, index=TEAM.index(r.assignee) if r.assignee in TEAM else 0,
-                               key=f"as_{rid}", label_visibility="collapsed")
-            if who != (r.assignee or "Unassigned"):
-                db.upsert_action(rid, assignee=who, status="In progress" if r.status == "New" else r.status,
-                                 action_text=rec["action"])
-                st.rerun()
-            if r.status != "Resolved" and b4.button("Resolve", key=f"rs_{rid}"):
-                db.upsert_action(rid, status="Resolved", resolved_at=datetime.now().isoformat(timespec="seconds"),
-                                 action_text=rec["action"])
-                st.rerun()
-            b5.markdown(f"<div class='small' style='padding-top:8px;text-align:right'>Status: <b>{r.status}</b></div>",
-                        unsafe_allow_html=True)
-    st.caption("Approving stores the reply and marks the review as replied. Posting to Google/Zomato/TripAdvisor "
-               "is done by copying the reply to the platform (their reply APIs need business-account access).")
-
 # ================================================================== 4. CAMPAIGNS (360-DEGREE)
-elif page == PAGES[4]:
+elif page == PAGES[3]:
     st.markdown("**Digital marketing · 360-degree campaigns tied to issue clusters**  \n"
                 "<span class='small'>Each campaign answers one HDBSCAN cluster. Success is measured the same way the "
                 "issue was found: the cluster's share of classified reviews should fall on the next pipeline "
@@ -831,7 +686,7 @@ elif page == PAGES[4]:
                        "if a new complaint cluster appears after a re-run.")
 
 # ================================================================== 5. MONTHLY REPORT
-elif page == PAGES[5]:
+elif page == PAGES[4]:
     rest_all = df_all[df_all["restaurant"] == ss.restaurant]
     months = sorted(rest_all["review_date"].dt.to_period("M").astype(str).unique(), reverse=True)
     c1, c2 = st.columns([2, 1])
@@ -887,7 +742,7 @@ elif page == PAGES[5]:
         st.dataframe(past, hide_index=True, width="stretch")
 
 # ================================================================== 6. SERVQUAL
-elif page == PAGES[6]:
+elif page == PAGES[5]:
     st.markdown("**SERVQUAL · customer expectations versus perceived service**  \n"
                 "<span class='small'>A negative gap means perceived service fell short of expectations. "
                 "NLP complaint counts use the current restaurant, source and date filters.</span>",
@@ -995,67 +850,3 @@ elif page == PAGES[1]:
     if branches:
         in_window = in_window[(in_window["restaurant"] != ss.restaurant) | in_window["branch"].isin(branches)]
     analytics_dashboard.render(in_window, an, {"an": an, "cur": cur, "prev": prev, "restaurant": ss.restaurant, "days": days})
-
-# ================================================================== 8. ISSUE PRIORITY (XGBoost)
-elif page == PAGES[7]:
-    import json as _json
-    _xdir = _HERE / "outputs" / "xgb_priority"
-    st.markdown("**Issue priority · XGBoost sentiment-decline risk by complaint category**")
-    if not (_xdir / "priority_ranking.csv").is_file():
-        st.warning("No model outputs yet. Run `python issue_priority_model.py` to train and evaluate.")
-    else:
-        _sum = _json.loads((_xdir / "run_summary.json").read_text())
-        _ev = pd.read_csv(_xdir / "evaluation.csv")
-        _rk = pd.read_csv(_xdir / "priority_ranking.csv")
-        st.warning(
-            "The dataset has **no star ratings**, so rating decline cannot be predicted. The target is a proxy: "
-            "the mean VADER sentiment of a restaurant × source falls from one month to the next. "
-            f"Panel: {_sum['panel_rows']} unit-months (train {_sum['train_rows']}, test {_sum['test_rows']}), "
-            "so results are exploratory.")
-        if not _sum["xgb_beats_baselines"]:
-            st.error(f"XGBoost (AUC {_sum['xgb_auc']:.2f}) did not beat the best baseline "
-                     f"(AUC {_sum['best_baseline_auc']:.2f}) on the held-out period; treat the model ranking as "
-                     "unvalidated and use the observed decline rates as the rule-based priority.")
-        st.markdown("**Baseline versus XGBoost (held-out later months)**")
-        st.dataframe(_ev.drop(columns=["train_rows", "test_rows"]), hide_index=True, width="stretch")
-        st.markdown("**Priority ranking** (change in predicted decline risk per +10pp share of the category)")
-        _rk["observed_lift_pp"] = (_rk["observed_decline_rate_high_share"] - _rk["observed_decline_rate_low_share"]) * 100
-        st.dataframe(_rk, hide_index=True, width="stretch", column_config={
-            "avg_risk_uplift_pp": st.column_config.NumberColumn("Risk uplift (pp)", format="%.2f"),
-            "ci_low_pp": st.column_config.NumberColumn("CI low", format="%.2f"),
-            "ci_high_pp": st.column_config.NumberColumn("CI high", format="%.2f"),
-            "observed_decline_rate_high_share": st.column_config.NumberColumn("Decline rate (high share)", format="%.2f"),
-            "observed_decline_rate_low_share": st.column_config.NumberColumn("Decline rate (low share)", format="%.2f"),
-            "observed_lift_pp": st.column_config.NumberColumn("Observed lift (pp)", format="%.1f"),
-            "mean_share": st.column_config.NumberColumn("Mean share", format="%.3f")})
-        st.caption("Interval = 95% over bootstrap refits of the model. 'Inconclusive' means the interval spans 0. "
-                   "Target definition and features: outputs/xgb_priority/target_definition.md.")
-        with st.expander("Data audit"):
-            st.dataframe(pd.read_csv(_xdir / "data_audit.csv"), hide_index=True, width="stretch")
-
-        _sdir = _xdir / "shap"
-        if (_sdir / "local_explanations.json").is_file():
-            st.markdown("---\n**Why does the model flag these? · SHAP explanations**")
-            _st = _json.loads((_sdir / "stability_summary.json").read_text())
-            st.info("SHAP shows which inputs moved the model's prediction. It does **not** show that a feature "
-                    "causes a sentiment decline.")
-            if _st["stable"]:
-                st.success(f"Explanations are reasonably stable (mean rank correlation {_st['mean_spearman']:.2f}, "
-                           f"top-5 overlap {_st['mean_top5_overlap']:.0%} across {_st['resamples']} refits).")
-            else:
-                st.warning(f"Explanations are **not very stable** (mean rank correlation {_st['mean_spearman']:.2f}, "
-                           f"top-5 overlap {_st['mean_top5_overlap']:.0%} across {_st['resamples']} refits) - "
-                           "the small panel makes feature rankings shift between refits; read them as indicative only.")
-            _gi = pd.read_csv(_sdir / "global_importance.csv")
-            _gc1, _gc2 = st.columns([3, 2])
-            _gc1.image(str(_sdir / "shap_summary.png"), caption="Global SHAP summary")
-            _gc2.markdown("**Leading contributing factors**")
-            _gc2.dataframe(_gi.head(8).rename(columns={"mean_abs_shap": "Mean |SHAP|",
-                                                       "value_vs_risk_corr": "Higher value → risk"}),
-                           hide_index=True, width="stretch")
-            _loc = _json.loads((_sdir / "local_explanations.json").read_text())
-            _pick = st.selectbox("High-risk prediction to explain", range(len(_loc)), format_func=lambda k: (
-                f"{_loc[k]['restaurant']} · {_loc[k]['source']} · {_loc[k]['month']} "
-                f"({_loc[k]['predicted_decline_probability']:.0%} risk)"))
-            st.write(_loc[_pick]["explanation"])
-            st.image(str(_sdir / _loc[_pick]["plot"]), caption="Local SHAP waterfall (log-odds; feature values shown are standardised)")
