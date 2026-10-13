@@ -115,6 +115,8 @@ def top_issues_table(ctx: dict) -> None:
 PIPELINE_STEPS = [("All reviews", "Selected chains + rivals"), ("Embed together", "Same Sentence-Transformer"),
                   ("HDBSCAN once", "Shared clusters"), ("Groq labels", "Name each cluster")]
 CHAIN_COLOURS = ["#1D9E75", "#D85A30", "#7F77DD", "#E0A526", "#3B8BD4", "#B4B2A9"]
+WIN_LOSS_STEPS = [("All reviews", "Every chain"), ("Name filter", "Regex on rivals"),
+                  ("Groq classify", "Win / loss / neutral"), ("Net win rate", "Tracked monthly")]
 
 
 def cluster_share_chart(df: pd.DataFrame, max_clusters: int = 12) -> None:
@@ -183,12 +185,112 @@ def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     st.dataframe(pd.DataFrame(rows).sort_values("score"), width="stretch", hide_index=True)
 
 
+RIVAL_PATTERNS = {
+    "A2B": r"\ba2b\b|adyar ananda", "Sangeetha": r"sangeetha|sangeeta", "Geetham": r"\bgeetham\b|\bgeetam\b",
+    "Saravana Bhavan": r"saravana", "Vasantha Bhavan": r"vasantha|namma veedu",
+    "Sree Annapoorna": r"annapoorna|annapurna",
+}
+WIN_LOSS_LABELS = ("win", "loss", "neutral")
+MAX_CLASSIFIED = 120
+WIN_RE = re.compile(r"better than|best compared|superior to|nicer than|tastier than|prefer(?:red)? (?:this|it) "
+                    r"over|instead of|unlike|beats|than (?:the )?(?:usual|other)", re.I)
+LOSS_RE = re.compile(r"used to (?:come|go|visit)|now (?:go|going|prefer|we go)|switched to|moved to|"
+                     r"better at|better in|\w+ is better|go to .+ instead|not as good as|worse than|"
+                     r"inferior to|prefer .+ over", re.I)
+
+
+def rival_mentions(df: pd.DataFrame, own: str) -> pd.DataFrame:
+    """Own-restaurant reviews that name a rival chain (regex name filter)."""
+    rows = []
+    for rival, pat in RIVAL_PATTERNS.items():
+        if re.search(pat, own, re.I):
+            continue
+        hit = df[(df["restaurant"] == own) & df["review"].str.contains(pat, case=False, regex=True)]
+        rows.append(hit.assign(rival=rival))
+    return pd.concat(rows) if rows else df.iloc[0:0].assign(rival=pd.Series(dtype=str))
+
+
+def _rule_label(text: str) -> str:
+    if LOSS_RE.search(text) and not re.search(r"better than", text, re.I):
+        return "loss"
+    return "win" if WIN_RE.search(text) else "neutral"
+
+
+@st.cache_data(show_spinner="Classifying competitor mentions with Groq…")
+def classify_win_loss(pairs: tuple[tuple[str, str, str], ...]) -> tuple[list[str], str]:
+    """(own, rival, text) -> win/loss/neutral. Uses Groq LLM when a key is set, else a keyword fallback."""
+    try:
+        from engine.config import GROQ_API_KEY, GROQ_MODEL
+        from engine.replies import _groq
+    except ImportError:
+        GROQ_API_KEY, GROQ_MODEL, _groq = "", "", None
+    if not (GROQ_API_KEY and _groq):
+        return [_rule_label(t) for _, _, t in pairs], "Keyword rules (set GROQ_API_KEY for the Groq LLM)"
+    labels = []
+    for own, rival, text in pairs:
+        prompt = (f"A customer review of {own} mentions a competitor, {rival}.\nReview: \"{text[:600]}\"\n"
+                  f"Answer with exactly one word. 'win' if the customer says {own} is better than {rival} or "
+                  f"chose {own} over it; 'loss' if they say {rival} is better or they left {own} for {rival}; "
+                  f"otherwise 'neutral'.")
+        out = (_groq(prompt, max_tokens=5, temperature=0) or "").strip().lower()
+        labels.append(next((l for l in WIN_LOSS_LABELS if l in out), _rule_label(text)))
+    return labels, f"Groq LLM · {GROQ_MODEL} (zero-shot classifier)"
+
+
+def win_loss_section(df: pd.DataFrame, own: str) -> None:
+    """Competitive win/loss: regex name filter -> Groq classify -> monthly net win rate."""
+    st.markdown("### Competitive win / loss tracker")
+    cols = st.columns(len(WIN_LOSS_STEPS))
+    for col, (title, sub) in zip(cols, WIN_LOSS_STEPS):
+        col.markdown(f"<div style='border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;"
+                     f"background:#f7f5f0'><b>{title}</b><br><small>{sub}</small></div>", unsafe_allow_html=True)
+    men = rival_mentions(df, own)
+    if men.empty:
+        st.info(f"No {own} reviews name a rival chain in the selected period.")
+        return
+    men = men.sort_values("review_date", ascending=False).head(MAX_CLASSIFIED)
+    labels, engine = classify_win_loss(tuple(zip([own] * len(men), men["rival"], men["review"])))
+    men = men.assign(outcome=labels)
+    st.caption(f"ML model used: **{engine}**. Net win rate = (wins − losses) / (wins + losses). "
+               f"Latest {MAX_CLASSIFIED} rival mentions are classified.")
+    wins, losses = (men["outcome"] == "win").sum(), (men["outcome"] == "loss").sum()
+    net = (wins - losses) / (wins + losses) * 100 if wins + losses else float("nan")
+    kpi_row([("Rival mentions", f"{len(men):,}"), ("Wins", str(wins)), ("Losses", str(losses)),
+             ("Net win rate", f"{net:+.0f}%" if pd.notna(net) else "n/a")])
+    c1, c2 = st.columns(2)
+    by_rival = men.groupby(["rival", "outcome"]).size().reset_index(name="reviews")
+    c1.markdown("**Outcome by rival**")
+    c1.plotly_chart(px.bar(by_rival, y="rival", x="reviews", color="outcome", orientation="h",
+                           color_discrete_map={"win": "#1D9E75", "loss": "#D85A30", "neutral": "#B4B2A9"})
+                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None, legend_title=None), width="stretch")
+    monthly = men.assign(month=pd.to_datetime(men["review_date"]).dt.to_period("M").dt.to_timestamp())
+    monthly = monthly.groupby("month")["outcome"].agg(
+        wins=lambda s: (s == "win").sum(), losses=lambda s: (s == "loss").sum()).reset_index()
+    monthly = monthly[(monthly["wins"] + monthly["losses"]) > 0]
+    monthly["net_win_rate"] = (monthly["wins"] - monthly["losses"]) / (monthly["wins"] + monthly["losses"]) * 100
+    c2.markdown("**Net win rate by month**")
+    if len(monthly):
+        c2.plotly_chart(px.line(monthly, x="month", y="net_win_rate", markers=True)
+                        .update_layout(margin=dict(t=10, b=10), yaxis=dict(range=[-100, 100], ticksuffix="%"),
+                                       yaxis_title=None, xaxis_title=None), width="stretch")
+    else:
+        c2.info("Not enough win/loss mentions to chart a monthly trend.")
+    g, l = st.columns(2)
+    for box, label, colour in ((g, "win", "#E8F5EC"), (l, "loss", "#FBE9EA")):
+        ex = men[men["outcome"] == label].head(3)
+        box.markdown(f"**Example {label}s**")
+        for t, r in zip(ex["review"], ex["rival"]):
+            box.markdown(f"<div style='background:{colour};border-radius:8px;padding:8px;margin-bottom:6px'>"
+                         f"“{t[:220]}” <small>(vs {r})</small></div>", unsafe_allow_html=True)
+
+
 def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """Head-to-head view of the selected restaurant against the chains chosen in 'Compare with'."""
-    if df["restaurant"].nunique() < 2:
-        st.info("Select at least one competitor in 'Compare with' (sidebar) to unlock competitor analysis.")
-        return
     own = issues_ctx["restaurant"]
+    if df["restaurant"].nunique() < 2:
+        st.info("Select at least one competitor in 'Compare with' (sidebar) to unlock the cluster comparison.")
+        win_loss_section(df, own)
+        return
     rows = [{"restaurant": r, "reviews": len(d), "score": an.reputation_score(d),
              "avg_rating": d["rating"].mean(), "negative_pct": (d["sentiment"] == "negative").mean() * 100}
             for r, d in df.groupby("restaurant")]
@@ -217,6 +319,7 @@ def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     clustered = df[~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
     st.dataframe(pd.crosstab(clustered["issue"], clustered["restaurant"], margins=True, margins_name="Total"),
                  width="stretch")
+    win_loss_section(df, own)
 
 
 def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
