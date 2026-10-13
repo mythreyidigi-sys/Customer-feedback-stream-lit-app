@@ -358,6 +358,100 @@ def driver_matrix_section(df: pd.DataFrame, own: str) -> None:
         st.markdown("**Fix first:** " + ", ".join(fix["cluster"]))
 
 
+DISH_PATTERNS = {
+    "Ghee roast": r"ghee\s?roast", "Filter coffee": r"filter\s?coffee|\bcoffee\b", "Pongal": r"pongal",
+    "Meals": r"\bmeals?\b|thali", "Dosa": r"\bdosai?\b|masala dosa", "Idli": r"\bidli|idly", "Vada": r"\bvada\b|\bvadai\b",
+    "Sambar": r"sambh?ar", "Biryani": r"biryani|briyani", "Parotta": r"parott?ha|porotta", "Sweets": r"sweets?|mysore pak|halwa|jangiri|laddu",
+    "Chaat": r"chaa?t|pani puri|pav bhaji", "Tea": r"\btea\b|\bchai\b", "Rice items": r"variety rice|curd rice|lemon rice|pulao",
+}
+DISH_SAMPLE_PER_CHAIN = 150
+DISH_STEPS = [("Reviews", "Chosen chains"), ("Groq: dish + score", "Per-dish sentiment"),
+              ("Mean per dish × chain", "Gap = A − B")]
+
+
+def _dish_hits(text: str) -> list[str]:
+    return [dish for dish, pat in DISH_PATTERNS.items() if re.search(pat, text, re.I)]
+
+
+@st.cache_data(show_spinner="Scoring dishes with Groq…")
+def score_dishes(items: tuple[tuple[str, str, float], ...]) -> tuple[pd.DataFrame, str]:
+    """(chain, review, vader) -> rows of chain, dish, score (-1..1). Groq extracts dish + score; VADER fallback."""
+    import json
+
+    try:
+        from engine.config import GROQ_API_KEY, GROQ_MODEL
+        from engine.replies import _groq
+    except ImportError:
+        GROQ_API_KEY, GROQ_MODEL, _groq = "", "", None
+    rows, used_groq = [], False
+    for chain, text, vader in items:
+        dishes = _dish_hits(text)
+        if not dishes:
+            continue
+        scores = {}
+        if GROQ_API_KEY and _groq:
+            prompt = (f"Review: \"{text[:600]}\"\nFor each of these dishes mentioned in the review: {dishes}, give "
+                      f"the customer's sentiment about that dish from -1 (very negative) to 1 (very positive). "
+                      f"Reply only with JSON like {{\"dish\": 0.5}}.")
+            out = _groq(prompt, max_tokens=80, temperature=0) or ""
+            try:
+                parsed = json.loads(out[out.index("{"):out.rindex("}") + 1])
+                scores = {d: float(v) for d, v in parsed.items() if d in dishes and -1 <= float(v) <= 1}
+                used_groq = used_groq or bool(scores)
+            except (ValueError, TypeError):
+                scores = {}
+        for dish in dishes:
+            rows.append({"chain": chain, "dish": dish, "score": scores.get(dish, vader)})
+    engine = (f"Groq LLM · {GROQ_MODEL} (dish extraction + sentiment scoring, VADER fallback per review)"
+              if used_groq else "VADER sentiment on dish keyword matches (set GROQ_API_KEY for the Groq LLM)")
+    return pd.DataFrame(rows, columns=["chain", "dish", "score"]), engine
+
+
+def dish_comparison_section(df: pd.DataFrame, own: str) -> None:
+    """Mean dish sentiment for two chains side by side, with the gap."""
+    st.markdown("### Dish-level sentiment: head to head")
+    cols = st.columns(len(DISH_STEPS))
+    for col, (title, sub) in zip(cols, DISH_STEPS):
+        col.markdown(f"<div style='border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;"
+                     f"background:#f7f5f0'><b>{title}</b><br><small>{sub}</small></div>", unsafe_allow_html=True)
+    chains = sorted(df["restaurant"].unique())
+    if len(chains) < 2:
+        st.info("Select at least one competitor in 'Compare with' (sidebar) to compare dishes.")
+        return
+    a_col, b_col = st.columns(2)
+    a = a_col.selectbox("Chain A", chains, index=chains.index(own) if own in chains else 0, key="dish_a")
+    b = b_col.selectbox("Chain B", [c for c in chains if c != a], key="dish_b")
+    sub = pd.concat([d.sort_values("review_date", ascending=False).head(DISH_SAMPLE_PER_CHAIN)
+                     for _, d in df[df["restaurant"].isin([a, b])].groupby("restaurant")])
+    sub = sub[sub["review"].map(lambda t: bool(_dish_hits(t)))]
+    scored, engine = score_dishes(tuple(zip(sub["restaurant"], sub["review"], sub["sentiment_score"])))
+    means = scored.pivot_table(index="dish", columns="chain", values="score", aggfunc="mean")
+    counts = scored.pivot_table(index="dish", columns="chain", values="score", aggfunc="size")
+    if a not in means or b not in means:
+        st.info("Not enough dish mentions for both chains in this period.")
+        return
+    means = means.dropna(subset=[a, b])
+    means = means[(counts.loc[means.index, a] >= 2) & (counts.loc[means.index, b] >= 2)]
+    if means.empty:
+        st.info("No dish has at least 2 mentions for both chains in this period.")
+        return
+    means["gap"] = means[a] - means[b]
+    means = means.sort_values("gap")
+    long = means.reset_index().melt(id_vars=["dish", "gap"], value_vars=[a, b], var_name="chain", value_name="score")
+    fig = px.bar(long, y="dish", x="score", color="chain", barmode="group", orientation="h", text="score",
+                 color_discrete_sequence=["#1D9E75", "#D85A30"], category_orders={"dish": list(means.index)})
+    fig.update_traces(texttemplate="%{text:+.2f}", textposition="outside")
+    for dish, gap in means["gap"].items():
+        fig.add_annotation(xref="paper", yref="y", x=1.02, y=dish, text=f"<b>{gap:+.2f}</b>", showarrow=False,
+                           font=dict(color="#1D9E75" if gap > 0 else "#D85A30"))
+    fig.add_annotation(xref="paper", yref="paper", x=1.02, y=1.04, text="Gap (A − B)", showarrow=False)
+    fig.update_layout(margin=dict(t=30, b=10, r=90), legend_title=None, yaxis_title=None,
+                      xaxis_title="Mean dish sentiment (−1 to +1)", height=max(320, 90 * len(means) + 100))
+    st.plotly_chart(fig, width="stretch")
+    st.caption(f"ML model used: **{engine}**. Gap = {a} − {b}; dishes need ≥ 2 mentions per chain. "
+               f"Latest {DISH_SAMPLE_PER_CHAIN} reviews per chain are scored.")
+
+
 def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """Head-to-head view of the selected restaurant against the chains chosen in 'Compare with'."""
     own = issues_ctx["restaurant"]
@@ -395,6 +489,7 @@ def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     st.dataframe(pd.crosstab(clustered["issue"], clustered["restaurant"], margins=True, margins_name="Total"),
                  width="stretch")
     win_loss_section(df, own)
+    dish_comparison_section(df, own)
     driver_matrix_section(df, own)
 
 
