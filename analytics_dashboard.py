@@ -284,12 +284,87 @@ def win_loss_section(df: pd.DataFrame, own: str) -> None:
                          f"“{t[:220]}” <small>(vs {r})</small></div>", unsafe_allow_html=True)
 
 
+DRIVER_STEPS = [("Cluster dummies", "From HDBSCAN"), ("LightGBM", "One per chain"),
+                ("SHAP", "Importance per cluster")]
+MIN_DRIVER_REVIEWS = 40
+
+
+@st.cache_data(show_spinner="Training LightGBM + SHAP…")
+def driver_importance(clusters: tuple[str, ...], ratings: tuple[float, ...]) -> pd.DataFrame:
+    """LightGBM on cluster dummies -> rating; importance = mean |SHAP| per cluster, performance = avg rating."""
+    import lightgbm as lgb
+    import shap
+
+    d = pd.DataFrame({"cluster": clusters, "rating": ratings})
+    keep = d["cluster"].value_counts()
+    d = d[d["cluster"].isin(keep[keep >= 5].index)]
+    x = pd.get_dummies(d["cluster"]).astype(int)
+    model = lgb.LGBMRegressor(n_estimators=150, learning_rate=0.05, num_leaves=8, min_child_samples=5,
+                              verbose=-1, random_state=0).fit(x, d["rating"])
+    sv = shap.TreeExplainer(model).shap_values(x)
+    imp = pd.Series(abs(sv).mean(axis=0), index=x.columns)
+    perf = d.groupby("cluster")["rating"].agg(["mean", "size"])
+    return pd.DataFrame({"cluster": imp.index, "importance": imp.values,
+                         "performance": perf.loc[imp.index, "mean"].values,
+                         "reviews": perf.loc[imp.index, "size"].values})
+
+
+def driver_matrix_section(df: pd.DataFrame, own: str) -> None:
+    """Importance (mean |SHAP|) vs performance (avg rating) quadrant chart for one chain's clusters."""
+    st.markdown("### Priority matrix: what to fix first")
+    cols = st.columns(len(DRIVER_STEPS))
+    for col, (title, sub) in zip(cols, DRIVER_STEPS):
+        col.markdown(f"<div style='border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;"
+                     f"background:#f7f5f0'><b>{title}</b><br><small>{sub}</small></div>", unsafe_allow_html=True)
+    chains = sorted(df["restaurant"].unique())
+    chain = st.selectbox("Chain (one LightGBM model per chain)", chains,
+                         index=chains.index(own) if own in chains else 0, key="driver_chain")
+    d = df[(df["restaurant"] == chain) & df["rating"].notna()]
+    d = d[~d["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
+    if len(d) < MIN_DRIVER_REVIEWS or d["issue"].nunique() < 3:
+        st.info(f"Need at least {MIN_DRIVER_REVIEWS} clustered, rated reviews and 3 clusters for {chain}.")
+        return
+    try:
+        res = driver_importance(tuple(d["issue"].astype(str)), tuple(d["rating"].astype(float)))
+    except ImportError:
+        st.info("Install 'lightgbm' and 'shap' to show the priority matrix.")
+        return
+    x_mid, y_mid = res["importance"].median(), d["rating"].mean()
+    res["quadrant"] = [("Fix first" if p < y_mid else "Keep strengths") if i >= x_mid
+                       else ("Low priority" if p < y_mid else "Maintain")
+                       for i, p in zip(res["importance"], res["performance"])]
+    fig = px.scatter(res, x="importance", y="performance", text="cluster", color="quadrant", size="reviews",
+                     size_max=28, color_discrete_map={"Fix first": "#D85A30", "Keep strengths": "#1D9E75",
+                                                      "Maintain": "#3B8BD4", "Low priority": "#B4B2A9"})
+    xmax, ymin, ymax = res["importance"].max() * 1.1, res["performance"].min() - 0.2, res["performance"].max() + 0.2
+    fig.add_shape(type="rect", x0=x_mid, x1=xmax, y0=ymin, y1=y_mid, fillcolor="#FBE9EA", opacity=0.5, line_width=0,
+                  layer="below")
+    fig.add_vline(x=x_mid, line_dash="dash", line_color="#999")
+    fig.add_hline(y=y_mid, line_dash="dash", line_color="#999")
+    for txt, ax, ay in (("Maintain", 0.01, 0.98), ("Keep strengths", 0.99, 0.98),
+                        ("Low priority", 0.01, 0.02), ("Fix first", 0.99, 0.02)):
+        fig.add_annotation(xref="paper", yref="paper", x=ax, y=ay, text=f"<b>{txt}</b>", showarrow=False,
+                           xanchor="left" if ax < 0.5 else "right", yanchor="top" if ay > 0.5 else "bottom")
+    fig.update_traces(textposition="top center")
+    fig.update_layout(margin=dict(t=10, b=10), height=480, legend_title=None,
+                      xaxis=dict(title="Importance (mean |SHAP|) →", range=[0, xmax]),
+                      yaxis=dict(title="Performance (avg rating in cluster) ↑", range=[ymin, ymax]))
+    st.plotly_chart(fig, width="stretch")
+    st.caption("ML model used: **LightGBM regressor** (rating ~ HDBSCAN cluster dummies, one model per chain) "
+               "explained with **SHAP TreeExplainer**. Dashed lines = median importance and the chain's average "
+               "rating. Bubble size = reviews in the cluster.")
+    fix = res[res["quadrant"] == "Fix first"].sort_values("importance", ascending=False)
+    if len(fix):
+        st.markdown("**Fix first:** " + ", ".join(fix["cluster"]))
+
+
 def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     """Head-to-head view of the selected restaurant against the chains chosen in 'Compare with'."""
     own = issues_ctx["restaurant"]
     if df["restaurant"].nunique() < 2:
         st.info("Select at least one competitor in 'Compare with' (sidebar) to unlock the cluster comparison.")
         win_loss_section(df, own)
+        driver_matrix_section(df, own)
         return
     rows = [{"restaurant": r, "reviews": len(d), "score": an.reputation_score(d),
              "avg_rating": d["rating"].mean(), "negative_pct": (d["sentiment"] == "negative").mean() * 100}
@@ -320,6 +395,7 @@ def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
     st.dataframe(pd.crosstab(clustered["issue"], clustered["restaurant"], margins=True, margins_name="Total"),
                  width="stretch")
     win_loss_section(df, own)
+    driver_matrix_section(df, own)
 
 
 def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
