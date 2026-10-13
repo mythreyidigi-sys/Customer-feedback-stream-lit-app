@@ -176,12 +176,47 @@ def reputation_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
                                    yaxis_title=None), width="stretch")
     with d2.container(border=True):
         top_issues_table(issues_ctx)
-    cluster_share_chart(df)
     st.markdown("**Reputation by restaurant and branch**")
     rows = [{"restaurant": r, "branch": b, "reviews": len(d), "score": an.reputation_score(d),
              "negative_pct": round((d["sentiment"] == "negative").mean() * 100, 1)}
             for (r, b), d in df.groupby(["restaurant", "branch"])]
     st.dataframe(pd.DataFrame(rows).sort_values("score"), width="stretch", hide_index=True)
+
+
+def competitor_tab(df: pd.DataFrame, an, issues_ctx: dict) -> None:
+    """Head-to-head view of the selected restaurant against the chains chosen in 'Compare with'."""
+    if df["restaurant"].nunique() < 2:
+        st.info("Select at least one competitor in 'Compare with' (sidebar) to unlock competitor analysis.")
+        return
+    own = issues_ctx["restaurant"]
+    rows = [{"restaurant": r, "reviews": len(d), "score": an.reputation_score(d),
+             "avg_rating": d["rating"].mean(), "negative_pct": (d["sentiment"] == "negative").mean() * 100}
+            for r, d in df.groupby("restaurant")]
+    comp = pd.DataFrame(rows).sort_values("score", ascending=False)
+    rivals = comp[comp["restaurant"] != own]
+    own_row = comp[comp["restaurant"] == own]
+    if len(own_row) and len(rivals):
+        gap = own_row["score"].iloc[0] - rivals["score"].mean()
+        rank = int((comp["score"] > own_row["score"].iloc[0]).sum()) + 1
+        kpi_row([(f"{own} reputation score", f"{own_row['score'].iloc[0]:.1f}"),
+                 ("Rank among compared chains", f"{rank} of {len(comp)}"),
+                 ("Gap vs rival average", f"{gap:+.1f}"),
+                 ("Best rival", f"{rivals.iloc[0]['restaurant']} ({rivals.iloc[0]['score']:.1f})")])
+    c1, c2 = st.columns(2)
+    c1.markdown("**Reputation score by chain**")
+    c1.plotly_chart(px.bar(comp.sort_values("score"), y="restaurant", x="score", orientation="h", text="score",
+                           range_x=[0, 100]).update_traces(texttemplate="%{text:.1f}")
+                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None), width="stretch")
+    c2.markdown("**Negative review share by chain**")
+    c2.plotly_chart(px.bar(comp.sort_values("negative_pct"), y="restaurant", x="negative_pct", orientation="h",
+                           text="negative_pct").update_traces(texttemplate="%{text:.1f}%")
+                    .update_layout(margin=dict(t=10, b=10), yaxis_title=None, xaxis_title="% negative"),
+                    width="stretch")
+    cluster_share_chart(df)
+    st.markdown("**Reviews per cluster and chain**")
+    clustered = df[~df["issue"].astype("string").str.strip().str.lower().isin(NOISE_LABELS)]
+    st.dataframe(pd.crosstab(clustered["issue"], clustered["restaurant"], margins=True, margins_name="Total"),
+                 width="stretch")
 
 
 def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
@@ -193,13 +228,18 @@ def render(df: pd.DataFrame, an, issues_ctx: dict) -> None:
 
     st.caption("Sentiment = VADER compound score (−1 to +1) on each review. Promoter ≥ 0.5, Detractor ≤ 0, "
                "otherwise Neutral. Price perception is keyword-based.")
-    tab_overview, tab_rep, tab_issues, tab_segments = st.tabs(["Overview", "Reputation scoring and clustering", "Issues & sentiment", "Segments & price"])
+    tab_overview, tab_rep, tab_comp, tab_issues, tab_segments = st.tabs(
+        ["Overview", "Reputation scoring and clustering", "Competitor analysis", "Issues & sentiment",
+         "Segments & price"])
 
     by_rest = df.groupby("restaurant").agg(reviews=("review", "size"), avg_sentiment=("sentiment_score", "mean"),
                                            branches=("branch", "nunique")).reset_index()
 
     with tab_rep:
         reputation_tab(df, an, issues_ctx)
+
+    with tab_comp:
+        competitor_tab(df, an, issues_ctx)
 
     with tab_overview:
         kpi_row([("Count of review", f"{len(df):,}"), ("Count of branch", f"{df['branch'].nunique():,}"),
