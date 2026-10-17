@@ -50,13 +50,25 @@ instead of crashing, so the app always loads.
 
 1. **Base dataset**: loaded from `outputs/reviews_with_issue_classification.xlsx` if present, else `outputs/cleaned_reviews.xlsx`. Columns are auto-detected and standardized (`review_text`, `restaurant`, `branch`, `platform`, `rating`, `review_date`, `issue_cluster`) regardless of the exact source column names.
 2. **Missing rating/date columns**: if your dataset has no rating or review-date column, the app shows a banner and substitutes a neutral rating (3) only. Date-based analysis uses only real dates present in the dataset.
-3. **Classifier**: loaded from `scripts/issue_classifier.joblib` (also checks `scripts_new792026/issue_classifier.joblib` as a fallback path). Applied on demand from the Existing Reviews tab, and automatically to any new review added via Customer Review Intake.
+3. **Classifier**: new reviews are tagged during import with the trained issue model where confidence is sufficient, otherwise with the rule-based fallback. Supplied issue labels are preserved. See [Live issue classification](#live-issue-classification) for confidence handling and staff review.
 4. **Emotion / Escalation / Reply**: computed live in the app via `emotion_classification.py`, `escalation_detection.py`, `empathetic_reply_generator.py` (shared helper: `cx_common.py`) — no offline pre-computation required, though these also work if you run them offline and wire in their outputs.
 5. **SERVQUAL**: two supported formats, auto-detected:
    - **Field-survey template** (`Dimension|item|E/P` columns, e.g. from `servqual_survey_template.xlsx`) — scored via `servqual_survey_analysis.py`'s `score_survey()`.
    - **Real Google Forms export** (e.g. `Restaurant_Survey__Responses_SERVQUAL.xlsx`) — questions like "Quality of food [EXPECTATION]" / "[ACTUAL]" are auto-matched by keyword to the 5 SERVQUAL dimensions (`GOOGLE_FORMS_QUESTION_TO_DIMENSION` in `main.py`). Dimensions with no matching question in your form (e.g. Assurance, if your form doesn't ask about it) are correctly omitted rather than shown with fabricated data. If you add/reword questions, update that mapping dict to match.
    Either way, the tab triangulates against the live issue-category frequencies from your working dataset.
 6. **Resolution Workflow**: state is kept in `st.session_state` for the current session only. Streamlit Cloud has no built-in database, so this does **not** persist across app reboots — for real persistence, wire the save/load logic to a Google Sheet, Airtable, or small hosted database.
+
+### Live issue classification
+
+New reviews use the tracked Random Forest model in
+`scripts_new792026/issue_classifier.joblib` when its highest class probability
+is at least 0.65. The model's issue labels are mapped to the dashboard taxonomy.
+Positive reviews and food-safety red flags stay on the existing rule-based path;
+low-confidence predictions also fall back to the rules and appear in the Search
+page's **Review low-confidence ML predictions** queue. Staff corrections are
+saved to the review database and update the issue's urgency score. Displayed
+model probabilities are estimates, not calibrated probabilities. If the model
+artifact is absent, the app reports that and continues with rule-based labels.
 
 ### Optional: Groq API for real LLM output
 

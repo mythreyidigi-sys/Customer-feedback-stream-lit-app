@@ -57,8 +57,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from engine import analytics as an
+from engine import classifier as issue_classifier
 from engine import db
-from engine.config import (HIGH_THRESHOLD, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD,
+from engine.config import (HIGH_THRESHOLD, ISSUES, POSITIVE_ISSUE, RAW_DIR, SOURCES, TEAM, URGENT_THRESHOLD,
                            canonical_chain_name)
 from engine.importer import import_file, read_file, source_from_filename
 from engine.playbook import deadline_text, recommend
@@ -420,6 +421,7 @@ if df_all.empty:
     st.warning("No reviews in the database yet.")
     with st.container(border=True):
         st.markdown("Upload review files to start analysing customer experience.")
+        st.caption(issue_classifier.issue_model_status())
         render_upload_analyse_form("empty_state")
     st.stop()
 
@@ -511,6 +513,7 @@ if page == PAGES[0]:
         st.markdown("## Add a batch of reviews")
         st.markdown("Upload any review CSV or Excel file. We detect its platform when possible, then score customer "
                 "sentiment and group reviews into recurring themes.")
+        st.caption(issue_classifier.issue_model_status())
         render_upload_analyse_form("search")
         source_counts = rest_df["source"].value_counts()
         source_counts = source_counts[source_counts.index.astype(str).str.strip().str.casefold() != "other"]
@@ -533,6 +536,56 @@ if page == PAGES[0]:
             b.progress(int(source_counts.get(s, 0) / mx * 100))
             c.write(f"**{source_counts.get(s, 0)}**")
         st.button("See the overview →", on_click=go_overview)
+
+    needs_review = df_all[
+        df_all["issue_source"].eq("rules_low_confidence") & df_all["issue_confidence"].notna()
+    ].sort_values("issue_confidence")
+    with st.expander(f"Review low-confidence ML predictions ({len(needs_review):,})"):
+        st.caption("Model probabilities are estimates, not calibrated probabilities. Staff corrections are saved "
+                   "and replace the model label.")
+        if needs_review.empty:
+            st.info("There are no low-confidence model predictions awaiting review.")
+        else:
+            review_options = needs_review.head(100).reset_index(drop=True)
+            st.dataframe(
+                review_options[["id", "restaurant", "branch", "issue", "issue_confidence", "text"]],
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "issue_confidence": st.column_config.NumberColumn(
+                        "Model confidence estimate", format="percent", width="small"
+                    ),
+                },
+            )
+            selected_id = st.selectbox(
+                "Review to correct",
+                review_options["id"].astype(int).tolist(),
+                format_func=lambda review_id: (
+                    f"Review {review_id} · "
+                    f"{review_options.loc[review_options['id'].eq(review_id), 'issue'].iat[0]}"
+                ),
+                key="issue_review_id",
+            )
+            selected_review = review_options.loc[review_options["id"].eq(selected_id)].iloc[0]
+            st.write(selected_review["text"])
+            labels = sorted(set(ISSUES) | {POSITIVE_ISSUE, str(selected_review["issue"])})
+            corrected_issue = st.selectbox(
+                "Correct issue label",
+                labels,
+                index=labels.index(str(selected_review["issue"])),
+                key=f"issue_review_label_{selected_id}",
+            )
+            if st.button("Save corrected label", type="primary", key=f"save_issue_{selected_id}"):
+                corrected_urgency = issue_classifier.urgency_of(
+                    selected_review["rating"],
+                    selected_review["sentiment"],
+                    corrected_issue,
+                    selected_review["emotion"],
+                    bool(selected_review["red_flag"]),
+                )
+                db.update_issue_label(int(selected_id), corrected_issue, corrected_urgency)
+                st.toast("Corrected issue label saved.")
+                st.rerun()
 
 # ================================================================== 2. OVERVIEW
 elif page == PAGES[2]:
@@ -585,8 +638,19 @@ elif page == PAGES[2]:
     with st.expander("Read the reviews in this date range"):
         q = st.text_input("Search text", placeholder="e.g. sambar, parking, rude")
         show = cur if not q else cur[cur["text"].str.contains(q, case=False, na=False)]
-        st.dataframe(show[["review_date", "source", "branch", "rating", "issue", "emotion", "urgency", "text"]]
-                     .sort_values("review_date", ascending=False), hide_index=True, width="stretch")
+        st.dataframe(
+            show[["review_date", "source", "branch", "rating", "issue", "issue_source",
+                  "issue_confidence", "emotion", "urgency", "text"]]
+            .sort_values("review_date", ascending=False),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "issue_source": "Label source",
+                "issue_confidence": st.column_config.NumberColumn(
+                    "Model confidence estimate", format="percent"
+                ),
+            },
+        )
         st.download_button("Download CSV", show.to_csv(index=False).encode(), f"{ss.restaurant}_reviews.csv", "text/csv")
 
 # ================================================================== 4. CAMPAIGNS (360-DEGREE)

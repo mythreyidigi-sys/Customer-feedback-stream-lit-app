@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS reviews (
     text          TEXT NOT NULL,            -- original review text
     text_clean    TEXT,                     -- cleaned text used for classification
     issue         TEXT,                     -- issue category
-    issue_source  TEXT,                     -- 'file' (your HDBSCAN label) or 'classifier'
+    issue_source  TEXT,                     -- file / ml_model / rules / rules_low_confidence / human
+    issue_confidence REAL,                  -- model confidence estimate; NULL for rules / supplied labels
     sentiment     TEXT,                     -- positive / neutral / negative
     emotion       TEXT,                     -- anger / frustration / disappointment / neutral / delight
     urgency       INTEGER,                  -- 1-10
@@ -148,6 +149,7 @@ def init_db():
         con.executescript(SCHEMA)
         for table, column, definition in (
             ("reviews", "batch_id", "TEXT"),
+            ("reviews", "issue_confidence", "REAL"),
             ("runs", "batch_id", "TEXT"),
             ("runs", "undone_at", "TEXT"),
         ):
@@ -178,7 +180,7 @@ def init_db():
 def insert_reviews(df: pd.DataFrame, batch_id: str) -> int:
     """Insert classified reviews; duplicates (same review_hash) are skipped. Returns rows added."""
     cols = ["review_hash", "source", "restaurant", "branch", "review_date", "rating", "text", "text_clean",
-            "issue", "issue_source", "sentiment", "emotion", "urgency", "red_flag"]
+            "issue", "issue_source", "issue_confidence", "sentiment", "emotion", "urgency", "red_flag"]
     rows = [tuple(None if pd.isna(v) else v for v in r) + (batch_id, now())
             for r in df[cols].itertuples(index=False)]
     with connect() as con:
@@ -190,6 +192,17 @@ def insert_reviews(df: pd.DataFrame, batch_id: str) -> int:
         )
         after = con.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]
     return after - before
+
+
+def update_issue_label(review_id: int, issue: str, urgency: int) -> None:
+    """Save a staff-corrected issue label and remove its model confidence."""
+    with connect() as con:
+        updated = con.execute(
+            "UPDATE reviews SET issue=?, issue_source='human', issue_confidence=NULL, urgency=? WHERE id=?",
+            (issue, urgency, review_id),
+        )
+        if updated.rowcount != 1:
+            raise ValueError(f"Review {review_id} was not found; its issue label was not updated.")
 
 
 def log_run(source, file_name, read, added, message="", batch_id=None):

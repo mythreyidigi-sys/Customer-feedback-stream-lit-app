@@ -1,15 +1,27 @@
-"""Classifier: issue category, sentiment, emotion and urgency (1-10) for every review.
-
-Two routes to the issue label:
-  1. Your file already has an issue / cluster label (from your HDBSCAN + Groq pipeline) -> kept as-is.
-  2. Otherwise a transparent keyword classifier assigns one of the 10 categories in config.ISSUES.
-     (tools/discover_issues.py can re-label everything with HDBSCAN later.)
-"""
+"""Classify review issues with the trained model and a rule-based safety net."""
 import re
+from functools import lru_cache
+from pathlib import Path
 
+import joblib
 import pandas as pd
 
 from .config import ISSUES, ISSUE_SEVERITY, POSITIVE_ISSUE, RED_FLAGS
+
+ISSUE_MODEL_PATH = Path(__file__).resolve().parents[4] / "scripts_new792026" / "issue_classifier.joblib"
+MODEL_CONFIDENCE_THRESHOLD = 0.65
+MODEL_LABEL_MAP = {
+    "Ambience & Seating": "Ambience & Location",
+    "Billing & Online Ordering Issues": "Service Quality",
+    "Cleanliness & Restroom Hygiene": "Poor Experience / Hygiene Complaints",
+    "Food Quantity & Value for Money": "Food Quantity & Value for Money",
+    "Food Variety & Fast Service": "Food Variety & Fast Service",
+    "Parking & Accessibility": "Ambience & Location",
+    "Poor Experience & Food Hygiene Complaints": "Poor Experience / Hygiene Complaints",
+    "Service Quality": "Service Quality",
+    "Slow Service & Staff Negligence": "Slow Service & Staff Negligence",
+    "Staff Courtesy & Behaviour": "Pricing & Staff Performance",
+}
 
 NEG_WORDS = ["bad", "worst", "poor", "pathetic", "horrible", "terrible", "disgusting", "awful", "rude",
              "dirty", "cold", "stale", "slow", "not good", "disappointed", "disappointing", "never again",
@@ -81,20 +93,82 @@ def urgency_of(rating, sentiment, issue, emotion, red_flag) -> int:
     return int(max(1, min(10, base)))
 
 
+@lru_cache(maxsize=1)
+def _load_issue_model(model_path: str, modified_ns: int):
+    path = Path(model_path)
+    if not path.is_file():
+        return None
+    bundle = joblib.load(path)
+    if not isinstance(bundle, dict) or not {"model", "vectorizer"} <= bundle.keys():
+        raise ValueError(f"Unsupported issue-classifier bundle: {path}")
+    model, vectorizer = bundle["model"], bundle["vectorizer"]
+    model_classes = set(getattr(model, "classes_", ()))
+    if not model_classes or model_classes - MODEL_LABEL_MAP.keys():
+        raise ValueError(f"Issue-model labels do not match the configured label map: {path}")
+    if vectorizer is None or not hasattr(model, "predict_proba"):
+        raise ValueError(f"Issue model must include a vectorizer and predict_proba: {path}")
+    return model, vectorizer
+
+
+def _issue_model():
+    modified_ns = ISSUE_MODEL_PATH.stat().st_mtime_ns if ISSUE_MODEL_PATH.is_file() else 0
+    return _load_issue_model(str(ISSUE_MODEL_PATH), modified_ns)
+
+
+def issue_model_status() -> str:
+    if _issue_model() is None:
+        return f"Trained issue model not found at {ISSUE_MODEL_PATH}; rule-based classification is active."
+    return f"Trained issue model loaded from {ISSUE_MODEL_PATH.name}."
+
+
 def classify(df: pd.DataFrame) -> pd.DataFrame:
-    """Expects columns text_clean, rating and optional issue (pre-labelled). Adds the classifier columns."""
+    """Classify reviews, using the trained model when confidence is sufficient."""
     df = df.copy()
     if df.empty:
-        return df.assign(issue_source=None, sentiment=None, emotion=None, urgency=None, red_flag=None)
+        return df.assign(issue_source=None, issue_confidence=None, sentiment=None, emotion=None,
+                         urgency=None, red_flag=None)
     if "issue" not in df.columns:
         df["issue"] = None
     df["issue_source"] = df["issue"].apply(lambda v: "file" if isinstance(v, str) and v.strip() else "classifier")
-    out = []
+    out, model_rows = [], []
     for text, rating, issue, src in zip(df["text_clean"], df["rating"], df["issue"], df["issue_source"]):
         red = bool(RED_RX.search(text))
         sent = sentiment_of(text, rating)
-        iss = issue.strip() if src == "file" else issue_of(text, sent, red)
+        confidence = None
+        if src == "file":
+            iss, src = issue.strip(), "file"
+        elif red:
+            iss, src = issue_of(text, sent, red), "rules"
+        elif sent == "positive":
+            iss, src = POSITIVE_ISSUE, "rules"
+        else:
+            model_rows.append((len(out), text, sent, rating, red))
+            out.append(None)
+            continue
         emo = emotion_of(text, sent)
-        out.append((iss, sent, emo, urgency_of(rating, sent, iss, emo, red), int(red)))
-    df[["issue", "sentiment", "emotion", "urgency", "red_flag"]] = pd.DataFrame(out, index=df.index)
+        out.append((iss, src, confidence, sent, emo, urgency_of(rating, sent, iss, emo, red), int(red)))
+
+    if model_rows:
+        bundle = _issue_model()
+        if bundle is None:
+            probabilities = None
+        else:
+            model, vectorizer = bundle
+            probabilities = model.predict_proba(vectorizer.transform([row[1] for row in model_rows]))
+        for i, (position, text, sent, rating, red) in enumerate(model_rows):
+            if probabilities is None:
+                iss, src, confidence = issue_of(text, sent, red), "rules", None
+            else:
+                best = int(probabilities[i].argmax())
+                confidence = float(probabilities[i][best])
+                model_issue = MODEL_LABEL_MAP[str(model.classes_[best])]
+                if confidence >= MODEL_CONFIDENCE_THRESHOLD:
+                    iss, src = model_issue, "ml_model"
+                else:
+                    iss, src = issue_of(text, sent, red), "rules_low_confidence"
+            emo = emotion_of(text, sent)
+            out[position] = (iss, src, confidence, sent, emo, urgency_of(rating, sent, iss, emo, red), int(red))
+    df[["issue", "issue_source", "issue_confidence", "sentiment", "emotion", "urgency", "red_flag"]] = (
+        pd.DataFrame(out, index=df.index)
+    )
     return df
