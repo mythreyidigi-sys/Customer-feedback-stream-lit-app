@@ -721,8 +721,7 @@ elif page == PAGES[4]:
         x3.metric("Median reply time", "-" if rp["avg_reply_hours"] is None else f"{rp['avg_reply_hours']:.0f} h", border=True)
         x4.metric("Escalations resolved", f"{rp['resolved']}/{rp['escalations']}", border=True)
 
-    c1, c2 = st.columns(2)
-    with c1.container(border=True):
+    with st.container(border=True):
         st.markdown("**Complaint themes vs last month**")
         iss = rep["issues"]
         iss = iss[~is_noise(iss["issue"])].head(8)
@@ -732,9 +731,23 @@ elif page == PAGES[4]:
         fig.update_layout(height=340, barmode="group", margin=dict(l=0, r=0, t=10, b=0),
                           yaxis=dict(autorange="reversed"), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(fig, width="stretch")
-    with c2.container(border=True):
+
+    with st.container(border=True):
         st.markdown("**Branches**")
-        st.dataframe(rep["branches"], hide_index=True, width="stretch", height=340)
+        st.dataframe(
+            rep["branches"],
+            hide_index=True,
+            width="stretch",
+            height=340,
+            column_config={
+                "branch": st.column_config.TextColumn("Branch", width="medium"),
+                "reviews": st.column_config.NumberColumn("Reviews", width="small"),
+                "avg_rating": st.column_config.NumberColumn("Avg rating", format="%.2f", width="small"),
+                "negative_pct": st.column_config.NumberColumn("Negative %", format="%.1f%%", width="small"),
+                "score": st.column_config.NumberColumn("Score", format="%.1f", width="small"),
+                "top_complaint": st.column_config.TextColumn("Top complaint", width="medium"),
+            },
+        )
 
     with st.expander("Previously generated reports"):
         with db.connect() as con:
