@@ -111,6 +111,10 @@ def split_name(raw_name, raw_branch):
 
 def clean_branch(b) -> str:
     b = str(b or "")
+    if re.search(r"(?i)restaurant[_\s-]*review", b) and re.search(
+        r"(?i)(?:^|[-_ ])reviews?(?:[-_ ])", b
+    ):
+        return "Main"
     b = re.sub(r"(?i)\b(chennai|tamil nadu|india|restaurant|veg|pure veg|hotel|branch)\b", " ", b)
     b = re.sub(r"\b\d{6}\b|\d+(st|nd|rd|th)?\s*(floor|main road)?", " ", b, flags=re.I)
     parts = [p.strip(" -|()–.") for p in re.split(r"[,(|)]| - ", b) if p.strip(" -|()–.")]
