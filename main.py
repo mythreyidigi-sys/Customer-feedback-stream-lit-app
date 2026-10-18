@@ -200,7 +200,7 @@ def render_upload_analyse_form(key_prefix):
     undo_all_key = f"{key_prefix}_undo_all"
     undo_all_clicked = undo_all_col.button(
         "↶ Undo all uploads", key=f"{key_prefix}_undo_all_btn", disabled=latest_batch is None,
-        help="Remove every batch uploaded through this screen. Previously loaded data stays.",
+        help="Remove every loaded batch: the cleaned review file and any uploads.",
     )
     if undo_all_clicked:
         st.session_state[undo_all_key] = True
@@ -214,6 +214,7 @@ def render_upload_analyse_form(key_prefix):
             yes_col, no_col = st.columns(2)
             if yes_col.button("Confirm undo all", key=f"{key_prefix}_confirm_undo_all", type="primary"):
                 removed = db.undo_all_import_batches()
+                forget_loaded_reviews()
                 st.session_state.pop(undo_all_key, None)
                 st.session_state["upload_notice"] = f"Undid all uploads and removed {removed:,} review(s)."
                 st.rerun()
@@ -246,6 +247,7 @@ def render_upload_analyse_form(key_prefix):
             confirm_col, cancel_col = st.columns(2)
             if confirm_col.button("Confirm undo", key=f"{key_prefix}_confirm_undo", type="primary"):
                 removed = db.undo_import_batch(pending_batch)
+                forget_loaded_reviews()
                 st.session_state.pop(undo_key, None)
                 st.session_state["upload_notice"] = f"Undid the latest upload and removed {removed:,} review(s)."
                 st.rerun()
@@ -413,18 +415,25 @@ def load_servqual_scores(path: str) -> tuple[pd.DataFrame, int]:
 # ------------------------------------------------------------------ data + sidebar filters
 @st.cache_resource(show_spinner="Loading cleaned reviews...")
 def load_cleaned_dataset(path: str, modified: float):
-    """Read the cleaned file as-is, check its counts, and sync it into the app database."""
+    """Read the cleaned file as-is, check its counts, and load it once as an undoable batch."""
     raw = cleaned_dataset.load_cleaned_reviews(Path(path))
     warnings = cleaned_dataset.check_counts(raw, Path(path).parent)
-    cleaned_dataset.sync_to_database(raw, db, issue_classifier.classify)
-    return raw, warnings
+    cleaned_dataset.sync_to_database(raw, db, issue_classifier.classify,
+                                     cleaned_dataset.batch_id_for(Path(path)), Path(path).name)
+    return warnings
+
+
+def forget_loaded_reviews():
+    """Drop everything the app holds in memory about the loaded reviews after an undo."""
+    st.cache_resource.clear()
+    st.cache_data.clear()
+    for key in ("_uploaded_review_focus", "_cleaned_upload_bytes", "as_of_date", "window_days"):
+        st.session_state.pop(key, None)
 
 
 cleaned_file = cleaned_dataset.find_cleaned_file(_HERE)
-cleaned_raw = None
 if cleaned_file is not None:
-    cleaned_raw, cleaned_warnings = load_cleaned_dataset(str(cleaned_file), cleaned_file.stat().st_mtime)
-    for cleaned_warning in cleaned_warnings:
+    for cleaned_warning in load_cleaned_dataset(str(cleaned_file), cleaned_file.stat().st_mtime):
         st.warning(cleaned_warning)
 
 df_all = db.load_reviews()

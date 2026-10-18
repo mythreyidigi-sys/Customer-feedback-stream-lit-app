@@ -84,19 +84,26 @@ def to_app_frame(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def sync_to_database(df: pd.DataFrame, db, classify) -> int:
-    """Make the app database hold exactly the rows of the cleaned file. Returns rows added."""
-    ids = set(df["Review_ID"])
+def batch_id_for(path: Path) -> str:
+    """One batch per version of the file, so a refreshed file loads again but an undone one does not."""
+    return f"{BATCH_ID}_{int(Path(path).stat().st_mtime)}"
+
+
+def sync_to_database(df: pd.DataFrame, db, classify, batch_id: str, file_name: str) -> int:
+    """Load the cleaned file once as an undoable batch. Returns rows added.
+
+    A batch that was already loaded, or undone by the user, is never loaded again.
+    """
     db.init_db()
     with db.connect() as con:
-        existing = {r[0] for r in con.execute(
-            "SELECT review_hash FROM reviews WHERE batch_id=?", (BATCH_ID,))}
-        stale = existing - ids
-        for review_hash in stale:
-            con.execute("DELETE FROM actions WHERE review_id IN (SELECT id FROM reviews WHERE review_hash=?)",
-                        (review_hash,))
-            con.execute("DELETE FROM reviews WHERE review_hash=?", (review_hash,))
-    new_rows = df[~df["Review_ID"].isin(existing)]
-    if new_rows.empty:
+        seen = con.execute("SELECT 1 FROM runs WHERE batch_id=? LIMIT 1", (batch_id,)).fetchone()
+        old_batches = [r[0] for r in con.execute(
+            "SELECT DISTINCT batch_id FROM runs WHERE batch_id LIKE ? AND batch_id<>? AND undone_at IS NULL",
+            (f"{BATCH_ID}_%", batch_id))]
+    if seen:
         return 0
-    return db.insert_reviews(classify(to_app_frame(new_rows)), BATCH_ID)
+    for old_batch in [*old_batches, BATCH_ID]:  # BATCH_ID: rows loaded before batches were logged
+        db.undo_import_batch(old_batch)
+    added = db.insert_reviews(classify(to_app_frame(df)), batch_id)
+    db.log_run("Cleaned file", file_name, len(df), added, "Loaded from the cleaned review file", batch_id)
+    return added

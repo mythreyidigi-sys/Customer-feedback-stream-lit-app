@@ -52,6 +52,24 @@ class CleanedDatasetTests(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn("loaded 4, clean_reviews.py reported 5", logs.output[0])
 
+    def test_cleaned_file_loads_as_undoable_batch_and_stays_removed_after_undo(self):
+        from unittest.mock import patch
+        from engine import db, classifier
+        df = pd.DataFrame(ROWS, columns=cleaned_dataset.COLUMNS)
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(db, "DB_PATH", Path(folder) / "empathy.db"):
+                added = cleaned_dataset.sync_to_database(df, db, classifier.classify, "cleaned_reviews_file_1", "f.csv")
+                batch = db.latest_import_batch()
+                self.assertEqual(added, 4)
+                self.assertIsNotNone(batch)
+
+                db.undo_import_batch(batch["batch_id"])
+                again = cleaned_dataset.sync_to_database(df, db, classifier.classify, "cleaned_reviews_file_1", "f.csv")
+
+                self.assertEqual(again, 0)
+                self.assertTrue(db.load_reviews().empty)
+                self.assertIsNone(db.latest_import_batch())
+
     def test_shipped_file_matches_expected_counts(self):
         path = cleaned_dataset.find_cleaned_file(ROOT)
         if path is None:
