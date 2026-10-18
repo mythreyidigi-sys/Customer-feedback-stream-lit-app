@@ -166,15 +166,11 @@ def render_upload_analyse_form(key_prefix):
         key=f"{key_prefix}_files",
     )
     st.caption("CSV, XLSX or XLS · upload files, then run the cleaning and analysis pipeline · relative dates use today")
-    fallback_source = "Other"
+    fallback_source = SOURCES[0]
     if uploaded_files and any(source_from_filename(file.name) is None for file in uploaded_files):
-        source_choice = st.selectbox(
-            "Platform for files without one in the filename", ["Other", *SOURCES], key=f"{key_prefix}_source"
+        fallback_source = st.selectbox(
+            "Platform for files without one in the filename", SOURCES, key=f"{key_prefix}_source"
         )
-        fallback_source = source_choice
-        if source_choice == "Other":
-            fallback_source = st.text_input("Platform name", value="Other", key=f"{key_prefix}_source_name").strip()
-            fallback_source = fallback_source or "Other"
 
     pipeline_key = f"{key_prefix}_processed_upload_hash"
     if uploaded_files:
