@@ -22,13 +22,9 @@ class BranchReportTests(unittest.TestCase):
 
         self.assertEqual(clean_branch(branch), "Main")
 
-    def test_branch_report_cleans_existing_page_slugs_without_dropping_reviews(self):
-        page_slug = (
-            "Restaurant_Review-g304556-d27106440-Reviews-Geetham_Veg_Restaurant-"
-            "Chennai_Madras_Chennai_District_Tamil_Nadu"
-        )
+    def test_branch_report_keeps_branch_names_and_rows_unchanged(self):
         reviews = pd.DataFrame({
-            "branch": [page_slug, page_slug, "Koyambedu"],
+            "branch": ["Unspecified", "Unspecified", "Koyambedu"],
             "rating": [4.0, 3.0, 5.0],
             "sentiment": ["negative", "neutral", "positive"],
             "issue": ["Service Quality", "Service Quality", "Food Quality"],
@@ -36,8 +32,7 @@ class BranchReportTests(unittest.TestCase):
 
         report = branch_table(reviews).set_index("branch")
 
-        self.assertNotIn(page_slug, report.index)
-        self.assertEqual(report.loc["Main", "reviews"], 2)
+        self.assertEqual(report.loc["Unspecified", "reviews"], 2)
         self.assertEqual(report.loc["Koyambedu", "reviews"], 1)
         self.assertEqual(int(report["reviews"].sum()), len(reviews))
 

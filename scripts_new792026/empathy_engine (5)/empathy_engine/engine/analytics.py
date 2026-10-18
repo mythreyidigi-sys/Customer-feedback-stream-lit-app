@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 
 from .config import HIGH_THRESHOLD, ISSUE_SEVERITY, POSITIVE_ISSUE, SPIKE_MIN_COUNT, SPIKE_RATIO
-from .importer import clean_branch
 
 CLOSED = ("Replied", "Resolved")
 
@@ -151,7 +150,6 @@ def _top_complaint(d):
 def branch_table(cur):
     if cur.empty:
         return pd.DataFrame()
-    cur = cur.assign(branch=cur["branch"].map(clean_branch))
     g = cur.groupby("branch")
     t = pd.DataFrame({
         "reviews": g.size(),

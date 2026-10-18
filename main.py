@@ -66,6 +66,7 @@ from engine.playbook import deadline_text, recommend
 from engine.replies import draft_reply, groq_available, template_reply
 from engine.report import build_report, save_report
 from clean_reviews import OUTPUT_FILE as CLEANED_REVIEWS_OUTPUT, clean_reviews_dataframe
+import cleaned_dataset
 import importlib
 
 import analytics_dashboard
@@ -410,6 +411,22 @@ def load_servqual_scores(path: str) -> tuple[pd.DataFrame, int]:
 
 
 # ------------------------------------------------------------------ data + sidebar filters
+@st.cache_resource(show_spinner="Loading cleaned reviews...")
+def load_cleaned_dataset(path: str, modified: float):
+    """Read the cleaned file as-is, check its counts, and sync it into the app database."""
+    raw = cleaned_dataset.load_cleaned_reviews(Path(path))
+    warnings = cleaned_dataset.check_counts(raw, Path(path).parent)
+    cleaned_dataset.sync_to_database(raw, db, issue_classifier.classify)
+    return raw, warnings
+
+
+cleaned_file = cleaned_dataset.find_cleaned_file(_HERE)
+cleaned_raw = None
+if cleaned_file is not None:
+    cleaned_raw, cleaned_warnings = load_cleaned_dataset(str(cleaned_file), cleaned_file.stat().st_mtime)
+    for cleaned_warning in cleaned_warnings:
+        st.warning(cleaned_warning)
+
 df_all = db.load_reviews()
 
 if df_all.empty:
@@ -445,7 +462,8 @@ with st.sidebar:
     st.markdown("### 💬 Empathy Engine")
     st.selectbox("Restaurant", restaurants, key="restaurant")
     rest_df = df_all[df_all["restaurant"] == ss.restaurant]
-    branches = st.multiselect("Branches", sorted(rest_df["branch"].unique()), placeholder="All branches")
+    branch_options = sorted(rest_df.loc[rest_df["branch"] != cleaned_dataset.UNSPECIFIED, "branch"].unique())
+    branches = st.multiselect("Branches", branch_options, placeholder="All branches")
     sources = st.multiselect("Sources", data_sources, default=data_sources)
     if uploaded_date_range is not None:
         default_range = uploaded_date_range
@@ -473,8 +491,9 @@ with st.sidebar:
     compare = st.multiselect("Compare with", [r for r in restaurants if r != ss.restaurant],
                              default=[r for r in ("A2B", "Sangeetha") if r in restaurants and r != ss.restaurant])
     st.divider()
+    branch_pairs = df_all.loc[df_all["branch"] != cleaned_dataset.UNSPECIFIED, ["restaurant", "branch"]]
     st.caption(f"Data: {len(df_all):,} reviews · {df_all['restaurant'].nunique()} chains · "
-               f"{df_all['branch'].nunique()} branches · {df_all['source'].nunique()} platforms")
+               f"{len(branch_pairs.drop_duplicates())} branches · {df_all['source'].nunique()} platforms")
     st.caption(f"{data_start:%d %b %Y} – {data_end:%d %b %Y}")
     st.caption("Clusters: Sentence-Transformer + HDBSCAN · labels by Groq LLM")
     st.caption("Replies: " + ("Groq LLM ✅" if groq_available() else "templates (set GROQ_API_KEY for AI replies)"))
