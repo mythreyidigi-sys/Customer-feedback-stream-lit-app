@@ -500,13 +500,6 @@ with st.sidebar:
     days = (cur_end - cur_start).days + 1
     compare = st.multiselect("Compare with", [r for r in restaurants if r != ss.restaurant],
                              default=[r for r in ("A2B", "Sangeetha") if r in restaurants and r != ss.restaurant])
-    st.divider()
-    branch_pairs = df_all.loc[df_all["branch"] != cleaned_dataset.UNSPECIFIED, ["restaurant", "branch"]]
-    st.caption(f"Data: {len(df_all):,} reviews · {df_all['restaurant'].nunique()} chains · "
-               f"{len(branch_pairs.drop_duplicates())} branches · {df_all['source'].nunique()} platforms")
-    st.caption(f"{data_start:%d %b %Y} – {data_end:%d %b %Y}")
-    st.caption("Clusters: Sentence-Transformer + HDBSCAN · labels by Groq LLM")
-    st.caption("Replies: " + ("Groq LLM ✅" if groq_available() else "templates (set GROQ_API_KEY for AI replies)"))
 
 (current_window, previous_window) = an.windows(as_of, days)
 cur_start, cur_end = current_window
