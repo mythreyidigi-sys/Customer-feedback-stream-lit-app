@@ -19,6 +19,7 @@ Pipeline (final dataset: 6 chains x 3 platforms = 18 combinations):
            4. Campaigns         Digital marketing / 360-degree campaigns tied to clusters
            5. Monthly report    PDF summary for managers
            6. SERVQUAL          Survey expectation/perception gaps and NLP triangulation
+           7. Empathetic Reply  Standalone, editable reply drafting
 
 Setup:
     pip install -r requirements.txt
@@ -79,7 +80,7 @@ db.init_db()
 GREEN, RED, GREY, AMBER, ACCENT = "#1D9E75", "#D85A30", "#B4B2A9", "#BA7517", "#0F6E56"
 SENT_COLORS = {"negative": RED, "neutral": GREY, "positive": GREEN}
 PAGES = ["🔍 1. Search", "📈 2. Analytics", "📊 3. Overview", "📣 4. Campaigns",
-         "📄 5. Monthly report", "🧭 6. SERVQUAL"]
+         "📄 5. Monthly report", "🧭 6. SERVQUAL", "💌 7. Empathetic Reply"]
 
 # ------------------------------------------------------------------ project reference figures
 # Final dataset as reported in the dissertation (used only as a reference caption; live
@@ -951,3 +952,62 @@ elif page == PAGES[1]:
     if branches:
         in_window = in_window[(in_window["restaurant"] != ss.restaurant) | in_window["branch"].isin(branches)]
     analytics_dashboard.render(in_window, an, {"an": an, "cur": cur, "prev": prev, "restaurant": ss.restaurant, "days": days})
+
+# ================================================================== 7. EMPATHETIC REPLY
+elif page == PAGES[6]:
+    st.markdown("**Draft a thoughtful response to a customer review**  \n"
+                "<span class='small'>Replies use Groq when configured, otherwise a local template. "
+                "Review and edit every draft before posting.</span>", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        reply_text = st.text_area(
+            "Customer review",
+            height=140,
+            placeholder="Paste the review you want to respond to...",
+            key="standalone_reply_review",
+        )
+        reply_branch = st.selectbox(
+            "Branch",
+            ["Not specified", *branch_options],
+            key="standalone_reply_branch",
+        )
+        reply_issue_options = sorted(df_all["issue"].dropna().astype(str).unique())
+        reply_issue = st.selectbox(
+            "Issue category",
+            reply_issue_options or ISSUES,
+            key="standalone_reply_issue",
+        )
+        reply_emotion_options = sorted(df_all["emotion"].dropna().astype(str).unique())
+        reply_emotion = st.selectbox(
+            "Customer emotion",
+            reply_emotion_options or ["neutral"],
+            key="standalone_reply_emotion",
+        )
+        reply_rating = st.slider(
+            "Review rating",
+            min_value=1,
+            max_value=5,
+            value=3,
+            key="standalone_reply_rating",
+        )
+
+        if st.button("Draft empathetic reply", type="primary", key="standalone_draft_reply"):
+            if not reply_text.strip():
+                st.warning("Enter a customer review before drafting a reply.")
+            else:
+                with st.spinner("Drafting reply..."):
+                    reply, reply_engine = draft_reply(
+                        ss.restaurant, reply_branch, reply_issue, reply_emotion, reply_text, reply_rating
+                    )
+                ss["standalone_reply_result"] = reply
+                ss["standalone_reply_engine"] = reply_engine
+
+    if ss.get("standalone_reply_result"):
+        engine_label = "Groq AI" if ss["standalone_reply_engine"] == "groq" else "local template"
+        st.caption(f"Drafted with {engine_label}. Edit the response before posting.")
+        st.text_area(
+            "Editable reply draft",
+            value=ss["standalone_reply_result"],
+            height=160,
+            key="standalone_reply_output",
+        )
