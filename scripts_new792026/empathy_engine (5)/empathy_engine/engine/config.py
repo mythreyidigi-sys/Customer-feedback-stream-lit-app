@@ -131,4 +131,15 @@ HIGH_THRESHOLD = 6        # urgency >= 6 -> "High" (goes to Action center)
 SPIKE_RATIO = 2.0         # weekly negative count vs trailing 4-week average
 SPIKE_MIN_COUNT = 3       # ignore spikes smaller than this
 
-TEAM = ["Unassigned", "Quality team", "Kitchen head", "Branch manager", "ORM team", "Operations head"]
+TEAM = [
+    "Unassigned",
+    "Branch manager",
+    "Restaurant manager",
+    "Kitchen head",
+    "Quality team",
+    "Quality & Hygiene Manager",
+    "ORM team",
+    "Guest Relations Manager",
+    "Operations head",
+    "Operations manager",
+]

@@ -39,7 +39,7 @@ That file is ignored by Git and must not be committed.
 | Emotion Analysis | Classifies every review into a dominant emotion (delight, disappointment, frustration, betrayal, relief, nostalgia, neutral) |
 | Root Cause Analysis | Cross-tabs emotion against issue category as a heatmap, plus a dominant-emotion-per-issue table |
 | Escalation Alerts | Transparent urgency scoring (emotion + severity keywords + rating + recency); flags reviews needing immediate attention, plus escalation rate by issue |
-| Empathetic Reply | Interactive draft-a-reply tool, issue/emotion/restaurant-aware, always a human-review draft |
+| Empathetic Reply | Prioritised high-urgency review queue with editable sample replies, AI drafting, and persistent assignment to hotel roles |
 | Resolution Workflow | Tracks corrective action (status, assignee, action taken, date, notes) for every escalated issue |
 
 Every tab degrades gracefully: if a required file or a previous step's

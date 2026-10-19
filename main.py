@@ -955,59 +955,137 @@ elif page == PAGES[1]:
 
 # ================================================================== 7. EMPATHETIC REPLY
 elif page == PAGES[6]:
-    st.markdown("**Draft a thoughtful response to a customer review**  \n"
-                "<span class='small'>Replies use Groq when configured, otherwise a local template. "
-                "Review and edit every draft before posting.</span>", unsafe_allow_html=True)
+    st.markdown("**High-priority reviews · response and assignment queue**  \n"
+                "<span class='small'>Open reviews with urgency 6 or higher appear first. "
+                "Each review gets an editable sample reply and can be assigned to a hotel role. "
+                "AI drafting is optional; all replies require human review.</span>", unsafe_allow_html=True)
 
-    with st.container(border=True):
-        reply_text = st.text_area(
-            "Customer review",
-            height=140,
-            placeholder="Paste the review you want to respond to...",
-            key="standalone_reply_review",
-        )
-        reply_branch = st.selectbox(
-            "Branch",
-            ["Not specified", *branch_options],
-            key="standalone_reply_branch",
-        )
-        reply_issue_options = sorted(df_all["issue"].dropna().astype(str).unique())
-        reply_issue = st.selectbox(
-            "Issue category",
-            reply_issue_options or ISSUES,
-            key="standalone_reply_issue",
-        )
-        reply_emotion_options = sorted(df_all["emotion"].dropna().astype(str).unique())
-        reply_emotion = st.selectbox(
-            "Customer emotion",
-            reply_emotion_options or ["neutral"],
-            key="standalone_reply_emotion",
-        )
-        reply_rating = st.slider(
-            "Review rating",
-            min_value=1,
-            max_value=5,
-            value=3,
-            key="standalone_reply_rating",
-        )
+    reply_pool = upto[upto["urgency"] >= HIGH_THRESHOLD].copy()
+    reply_open = reply_pool[~reply_pool["status"].isin(an.CLOSED)]
+    reply_urgent = reply_open[reply_open["urgency"] >= URGENT_THRESHOLD]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Open high-priority reviews", len(reply_open), border=True)
+    m2.metric("Urgent reviews (8–10)", len(reply_urgent), border=True)
+    m3.metric("Overdue open reviews", len(esc_overdue), border=True)
 
-        if st.button("Draft empathetic reply", type="primary", key="standalone_draft_reply"):
-            if not reply_text.strip():
-                st.warning("Enter a customer review before drafting a reply.")
-            else:
-                with st.spinner("Drafting reply..."):
-                    reply, reply_engine = draft_reply(
-                        ss.restaurant, reply_branch, reply_issue, reply_emotion, reply_text, reply_rating
+    filter_col, show_col = st.columns([2, 1])
+    reply_status = filter_col.selectbox(
+        "Show reviews",
+        ["Open", "All", "Replied", "Resolved"],
+        key="reply_queue_status",
+    )
+    per_page = show_col.selectbox("Show up to", [10, 20, 50], key="reply_queue_limit")
+    if reply_status == "Open":
+        reply_queue = reply_open
+    elif reply_status == "Replied":
+        reply_queue = reply_pool[reply_pool["status"] == "Replied"]
+    elif reply_status == "Resolved":
+        reply_queue = reply_pool[reply_pool["status"] == "Resolved"]
+    else:
+        reply_queue = reply_pool
+    reply_queue = reply_queue.sort_values(["urgency", "review_date"], ascending=[False, False])
+
+    if reply_queue.empty:
+        st.info("No high-priority reviews match this view. Check another restaurant or widen the date range.")
+    else:
+        st.caption(f"{len(reply_queue):,} matching reviews · showing {min(per_page, len(reply_queue))}")
+        for review in reply_queue.head(per_page).itertuples():
+            review_id = int(review.id)
+            branch = review.branch if isinstance(review.branch, str) and review.branch.strip() else "the branch"
+            issue = review.issue if isinstance(review.issue, str) and review.issue.strip() else "Customer feedback"
+            emotion = review.emotion if isinstance(review.emotion, str) and review.emotion.strip() else "neutral"
+            recommendation = recommend(issue, branch)
+            draft_key = f"priority_reply_{review_id}"
+
+            if draft_key not in ss:
+                saved_reply = review.reply_text if isinstance(review.reply_text, str) else ""
+                ss[draft_key] = saved_reply or template_reply(
+                    review.restaurant, branch, issue, emotion, review.text
+                )
+
+            urgency_label = "Urgent" if review.urgency >= URGENT_THRESHOLD else "High"
+            urgency_class = "p-urgent" if review.urgency >= URGENT_THRESHOLD else "p-high"
+            with st.container(border=True):
+                st.markdown(
+                    f"{pill(f'{urgency_label} · {review.urgency}/10', urgency_class)} "
+                    f"{pill(issue)} {pill(emotion.title())}"
+                    f"{pill('⚠ red flag', 'p-urgent') if review.red_flag else ''}",
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    f"{review.restaurant} · {branch} · {review.source} · "
+                    f"{'★' * int(review.rating) if pd.notna(review.rating) else 'No rating'} · "
+                    f"{review.review_date:%d %b %Y} · Status: {review.status}"
+                )
+                st.markdown(f"<div class='quote'>“{review.text}”</div>", unsafe_allow_html=True)
+                st.info(
+                    f"**Recommended action:** {recommendation['action']} · "
+                    f"Suggested owner: {recommendation['owner']}",
+                    icon="💡",
+                )
+
+                st.text_area(
+                    "Sample reply (edit before approving)",
+                    key=draft_key,
+                    height=120,
+                )
+
+                assignment_col, action_col = st.columns([2, 3])
+                role_options = list(TEAM)
+                if review.assignee and review.assignee not in role_options:
+                    role_options.append(review.assignee)
+                assigned_role = review.assignee if review.assignee in role_options else "Unassigned"
+                selected_role = assignment_col.selectbox(
+                    "Assign to",
+                    role_options,
+                    index=role_options.index(assigned_role),
+                    key=f"priority_assignee_{review_id}",
+                )
+                if selected_role != (review.assignee or "Unassigned"):
+                    db.upsert_action(
+                        review_id,
+                        assignee=selected_role,
+                        status="In progress" if review.status == "New" else review.status,
+                        action_text=recommendation["action"],
                     )
-                ss["standalone_reply_result"] = reply
-                ss["standalone_reply_engine"] = reply_engine
+                    st.rerun()
 
-    if ss.get("standalone_reply_result"):
-        engine_label = "Groq AI" if ss["standalone_reply_engine"] == "groq" else "local template"
-        st.caption(f"Drafted with {engine_label}. Edit the response before posting.")
-        st.text_area(
-            "Editable reply draft",
-            value=ss["standalone_reply_result"],
-            height=160,
-            key="standalone_reply_output",
-        )
+                ai_col, approve_col = action_col.columns(2)
+                if ai_col.button(
+                    "✨ Generate AI draft",
+                    key=f"priority_ai_{review_id}",
+                    disabled=not groq_available(),
+                    help=None if groq_available() else "Set GROQ_API_KEY to enable AI drafting",
+                ):
+                    with st.spinner("Generating reply..."):
+                        generated_reply, _ = draft_reply(
+                            review.restaurant,
+                            branch,
+                            issue,
+                            emotion,
+                            review.text,
+                            review.rating if pd.notna(review.rating) else None,
+                        )
+                    ss[draft_key] = generated_reply
+                    st.rerun()
+
+                if approve_col.button(
+                    "Approve reply",
+                    key=f"priority_approve_{review_id}",
+                    type="primary",
+                    disabled=not ss[draft_key].strip(),
+                ):
+                    db.upsert_action(
+                        review_id,
+                        status="Replied" if review.status != "Resolved" else "Resolved",
+                        reply_text=ss[draft_key],
+                        replied_at=datetime.now().isoformat(timespec="seconds"),
+                        action_text=recommendation["action"],
+                    )
+                    st.toast(f"Reply saved. Copy it and post it on {review.source}.")
+                    st.rerun()
+
+    st.caption(
+        "Assignments and approved replies are saved to the review database. "
+        "Posting to review platforms must be done separately."
+    )
